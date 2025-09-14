@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Nexus</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="gameContainer">
+    <!-- Top bar / Title -->
+    <header id="topBar">
+      <h1>Nexus</h1>
+    </header>
+
+    <!-- Scoreboard (above grid) -->
+    <div id="scoreboard">
+      <div class="player-stats" id="player1-stats">
+        <div class="player-label">Player</div>
+        <div class="hp">HP: <span id="player1-hp">20</span></div>
+        <div class="energy">Energy: <span id="player1-energy">0</span></div>
+      </div>
+
+      <div id="turn-info">
+        <div class="turn-text">Turn <span id="turn-number">1</span></div>
+      </div>
+
+      <div class="player-stats" id="player2-stats">
+        <div class="player-label">AI</div>
+        <div class="hp">HP: <span id="player2-hp">20</span></div>
+        <div class="energy">Energy: <span id="player2-energy">0</span></div>
+      </div>
+    </div>
+
+    <!-- Content area: main grid + controls row beneath -->
+    <div id="contentArea">
+      <!-- Main area: left panel, board, right panel -->
+      <div id="mainArea">
+        <!-- Left panel -->
+        <aside id="leftPanel" class="panel">
+          <h2>Info</h2>
+          <div id="unit-info-panel">
+            <div id="unit-details" class="unit-details empty">Select a unit, terrain, or shop item to see details</div>
+            <div id="unit-abilities" class="unit-abilities"></div>
+          </div>
+        </aside>
+
+        <!-- Board -->
+        <section id="boardPanel">
+          <div id="grid" class="grid" aria-label="game board"></div>
+        </section>
+
+        <!-- Right panel (shop) -->
+        <aside id="rightPanel" class="panel">
+          <h2>Shop</h2>
+          <div id="shop-panel">
+            <div id="shop-list" class="shop-list"></div>
+          </div>
+        </aside>
+      </div>
+
+      <!-- Controls row (three columns to align leftControls under leftPanel) -->
+      <div id="controlsRow">
+        <div id="leftControls">
+          <button id="endTurnBtn" class="action-btn">End Turn</button>
+          <button id="newGameBtn" class="action-btn">New Game</button>
+        </div>
+        <div></div>
+        <div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts in correct dependency order -->
+  <script type="module">
+    // Load units data first
+    import('./data/units.js').then(unitsModule => {
+      window.UNIT_TYPES = unitsModule.UNIT_TYPES;
+      
+      // Then load core modules
+      return Promise.all([
+        import('./core/state.js'),
+        import('./core/board.js'),
+        import('./core/map.js'),
+        import('./core/action.js'),
+        import('./core/turn.js')
+      ]);
+    }).then(([stateModule, boardModule, mapModule, actionsModule, turnModule]) => {
+      // Export to global scope for compatibility
+      window.NexusCore = {
+        state: stateModule.state,
+        resetState: stateModule.resetState,
+        getPublicState: stateModule.getPublicState,
+        uid: stateModule.uid,
+        
+        BOARD_SIZE: boardModule.BOARD_SIZE,
+        getCell: boardModule.getCell,
+        inBounds: boardModule.inBounds,
+        initBoard: boardModule.initBoard,
+        
+        generateSymmetricMapWithDensity: mapModule.generateSymmetricMapWithDensity,
+        
+        spawnUnit: actionsModule.spawnUnit,
+        moveUnit: actionsModule.moveUnit,
+        attackUnit: actionsModule.attackUnit,
+        useAbility: actionsModule.useAbility,
+        
+        endTurn: turnModule.endTurn
+      };
+      
+      // Load mechanics modules
+      return Promise.all([
+        import('./mechanics/spawn.js'),
+        import('./mechanics/nexus.js')
+      ]);
+    }).then(([spawnModule, nexusModule]) => {
+      window.NexusMechanics = {
+        placeSpawnersAndHearts: spawnModule.placeSpawnersAndHearts,
+        isSpawnableForPlayer: spawnModule.isSpawnableForPlayer,
+        getSpawnerForPlayer: spawnModule.getSpawnerForPlayer,
+        
+        placeNexusesSymmetric: nexusModule.placeNexusesSymmetric,
+        applyCaptureAndDamage: nexusModule.applyCaptureAndDamage
+      };
+      
+      // Load UI modules
+      return Promise.all([
+        import('./ui/render.js'),
+        import('./ui/hud.js'),
+        import('./ui/shop.js'),
+        import('./ui/info.js'),
+        import('./ui/highlights.js')
+      ]);
+    }).then(([renderModule, hudModule, shopModule, infoModule, highlightsModule]) => {
+      window.NexusUI = {
+        renderBoard: renderModule.renderBoard,
+        renderHUD: hudModule.renderHUD,
+        populateShopForPlayer: shopModule.populateShopForPlayer,
+        showUnitDetailsForInstance: infoModule.showUnitDetailsForInstance,
+        showCellInfo: infoModule.showCellInfo,
+        highlightSpawnableTiles: highlightsModule.highlightSpawnableTiles,
+        clearSpawnHighlights: highlightsModule.clearSpawnHighlights,
+        refreshSpawnHighlightsIfPending: highlightsModule.refreshSpawnHighlightsIfPending
+      };
+      
+      // Load AI module
+      return import('./ai/ai.js');
+    }).then((aiModule) => {
+      window.NexusAI = {
+        takeTurn: aiModule.takeTurn
+      };
+      
+      // Initialize the game
+      initializeGame();
+    }).catch(error => {
+      console.error('Error loading game modules:', error);
+      // Fallback to inline game if modules fail
+      loadInlineGame();
+    });
+
+    function initializeGame() {
+      // Set up game state
+      window.NexusCore.resetState();
+      window.NexusCore.initBoard();
+      window.NexusCore.generateSymmetricMapWithDensity();
+      window.NexusMechanics.placeSpawnersAndHearts();
+      window.NexusMechanics.placeNexusesSymmetric();
+      
+      // Set up UI event handlers
+      setupEventHandlers();
+      
+      // Initial render
+      updateUI();
+      
+      console.log('Nexus game initialized successfully');
+    }
+
+    function setupEventHandlers() {
+      const endTurnBtn = document.getElementById('endTurnBtn');
+      const newGameBtn = document.getElementById('newGameBtn');
+      const grid = document.getElementById('grid');
+      
+      if (endTurnBtn) {
+        endTurnBtn.addEventListener('click', () => {
+          window.NexusCore.endTurn();
+          updateUI();
+          
+          // AI turn if it's player 2's turn
+          if (window.NexusCore.state.currentPlayer === 2) {
+            setTimeout(() => {
+              try {
+                window.NexusAI.takeTurn();
+                // Auto-end AI turn so it becomes player's turn again
+                window.NexusCore.endTurn();
+                updateUI();
+              } catch (error) {
+                console.error('AI turn error:', error);
+              }
+            }, 300);
+          }
+        });
+      }
+      
+      if (newGameBtn) {
+        newGameBtn.addEventListener('click', initializeGame);
+      }
+      
+      if (grid) {
+        grid.addEventListener('click', handleGridClick);
+        // Suppress rapid re-render during aim between mousedown and click
+        grid.addEventListener('mousedown', () => {
+          const s = window.NexusCore.state;
+          if (s && s.abilityTargeting) {
+            s._suppressAimRerender = true;
+          }
+        });
+        grid.addEventListener('mouseup', () => {
+          const s = window.NexusCore.state;
+          if (s) {
+            // release on next frame to ensure click has been processed
+            requestAnimationFrame(() => { s._suppressAimRerender = false; });
+          }
+        });
+      }
+      
+      // Keyboard shortcuts
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          window.NexusCore.state.selectedUnit = null;
+          window.NexusCore.state.pendingShopSelection[window.NexusCore.state.currentPlayer] = null;
+          window.NexusCore.state.abilityTargeting = null;
+          window.NexusUI.clearSpawnHighlights();
+          updateUI();
+        }
+      });
+    }
+
+    function handleGridClick(event) {
+      const cell = event.target.closest('.cell');
+      if (!cell) return;
+      
+      const x = parseInt(cell.dataset.x);
+      const y = parseInt(cell.dataset.y);
+      
+      if (isNaN(x) || isNaN(y)) return;
+      
+      handleCellClick(x, y);
+    }
+
+    function handleCellClick(x, y) {
+      const state = window.NexusCore.state;
+      const cell = window.NexusCore.getCell(x, y);
+      
+      if (!cell) return;
+
+      // Ability targeting mode
+      if (state.abilityTargeting) {
+        const at = state.abilityTargeting;
+        // retrieve unit by id from cell map (light scan acceptable for 11x11)
+        let unitRef = null;
+        for (let yy = 0; yy < state.board.length; yy++) {
+          for (let xx = 0; xx < state.board[0].length; xx++) {
+            const c = window.NexusCore.getCell(xx, yy);
+            if (c && c.unit && c.unit.id === at.unitId) { unitRef = c.unit; break; }
+          }
+          if (unitRef) break;
+        }
+        if (unitRef) {
+          // For enemy_in_range abilities (like Volley), always use the clicked coordinates
+          // regardless of whether there's a unit there - the ability handles the AoE logic
+          const targetX = x;
+          const targetY = y;
+          
+          const ok = window.NexusCore.useAbility(unitRef, at.abilityIndex, targetX, targetY);
+          if (ok) {
+            state.abilityTargeting = null;
+            // show banner for ability used if set
+            if (!state._bannerText || state._bannerText.length === 0) {
+              const UNIT_TYPES = window.UNIT_TYPES || {};
+              const def = UNIT_TYPES[unitRef.defId] || {};
+              const ab = (def.abilities || [])[at.abilityIndex];
+              if (ab && ab.name) state._bannerText = `${ab.name} used!`;
+            }
+            updateUI();
+            // auto-clear banner shortly after
+            setTimeout(() => { state._bannerText = ''; if (typeof window.updateUI === 'function') window.updateUI(); }, 900);
+            return;
+          } else {
+            // stay in aim mode and refresh overlays/hints
+            if (typeof window.updateUI === 'function') window.updateUI();
+            return;
+          }
+        } else {
+          state.abilityTargeting = null;
+          if (typeof window.updateUI === 'function') window.updateUI();
+          return;
+        }
+      }
+
+      // Handle shop unit placement
+      const pendingSelection = state.pendingShopSelection[state.currentPlayer];
+      if (pendingSelection) {
+        const success = window.NexusCore.spawnUnit(pendingSelection.key, x, y, state.currentPlayer);
+        if (success) {
+          state.pendingShopSelection[state.currentPlayer] = null;
+          window.NexusUI.clearSpawnHighlights();
+          updateUI();
+          return;
+        } else {
+          window.NexusUI.showCellInfo(x, y);
+          return;
+        }
+      }
+
+      // Handle unit selection and commands
+      if (cell.unit) {
+        if (cell.unit.owner === state.currentPlayer) {
+          // Select friendly unit
+          if (state.selectedUnit && state.selectedUnit.id === cell.unit.id) {
+            state.selectedUnit = null;
+          } else {
+            state.selectedUnit = cell.unit;
+          }
+          window.NexusUI.showUnitDetailsForInstance(cell.unit);
+          updateUI();
+          return;
+        } else if (state.selectedUnit) {
+          // Attack enemy unit
+          const success = window.NexusCore.attackUnit(state.selectedUnit, x, y);
+          if (success) {
+            updateUI();
+            return;
+          }
+        }
+        window.NexusUI.showUnitDetailsForInstance(cell.unit);
+        return;
+      }
+
+      // NEW: allow attacking enemy heart by clicking its cell
+      if (state.selectedUnit && cell.heart && cell.heart.owner && cell.heart.owner !== state.currentPlayer) {
+        const success = window.NexusCore.attackUnit(state.selectedUnit, x, y);
+        if (success) {
+          updateUI();
+          return;
+        }
+      }
+
+      // Handle unit movement
+      if (state.selectedUnit) {
+        const success = window.NexusCore.moveUnit(state.selectedUnit, x, y);
+        if (success) {
+          updateUI();
+          return;
+        }
+      }
+
+      // Show cell info
+      window.NexusUI.showCellInfo(x, y);
+    }
+
+    function updateUI() {
+      window.NexusUI.renderBoard();
+      window.NexusUI.renderHUD();
+      window.NexusUI.populateShopForPlayer(window.NexusCore.state.currentPlayer);
+      window.NexusUI.refreshSpawnHighlightsIfPending();
+      
+      // Update turn display
+      const turnNumberEl = document.getElementById('turn-number');
+      if (turnNumberEl) {
+        turnNumberEl.textContent = window.NexusCore.state.turn;
+      }
+      
+      // Check for win condition
+      if (window.NexusCore.state.winner) {
+        setTimeout(() => {
+          alert(`Player ${window.NexusCore.state.winner} wins!`);
+        }, 100);
+      }
+    }
+
+    // Expose updateUI globally so UI modules can trigger re-render immediately (aim hover, ability select)
+    window.updateUI = updateUI;
+
+    // Fallback inline game for compatibility
+    function loadInlineGame() {
+      console.warn('Loading fallback inline game due to module loading issues');
+      // The existing game.js content would go here as fallback
+      // For now, just show an error
+      document.body.innerHTML = '<div style="padding: 20px; color: white; background: #0f1724;">Error loading game modules. Please check console for details.</div>';
+    }
+  </script>
+</body>
+</html>
