@@ -684,39 +684,10 @@
      Nexus capture & damage (ensure once per nexus per turn)
      ====================== */
   function applyNexusCaptureAndDamage() {
-    // Capture: unit standing on nexus captures it immediately to their owner (but capture effect doesn't grant damage until end-of-turn damage application)
-    for (let y = 0; y < BOARD_SIZE; y++) {
-      for (let x = 0; x < BOARD_SIZE; x++) {
-        const c = getCell(x, y);
-        if (c.nexus && c.unit) {
-          if (c.nexus.owner !== c.unit.owner) {
-            c.nexus.owner = c.unit.owner;
-            // log
-            // (don't apply damage here—damage applied in next phase below)
-          }
-        }
-      }
-    }
-
-    // Damage: for each nexus owned by a player, apply 1 damage to the opponent once per turn
-    for (let y = 0; y < BOARD_SIZE; y++) {
-      for (let x = 0; x < BOARD_SIZE; x++) {
-        const c = getCell(x, y);
-        if (c.nexus && c.nexus.owner) {
-          const owner = c.nexus.owner;
-          const opponent = owner === 1 ? 2 : 1;
-          const key = `${x},${y}`;
-          if (!state.lastNexusDamageTurn[key] || state.lastNexusDamageTurn[key] < state.turnNumber) {
-            state.players[opponent].hp = Math.max(0, state.players[opponent].hp - 1);
-            state.lastNexusDamageTurn[key] = state.turnNumber;
-            if (state.players[opponent].hp <= 0) {
-              state.winner = owner;
-              setTimeout(() => alert(`Player ${owner} wins! Player ${opponent}'s HP dropped to 0.`), 30);
-            }
-          }
-        }
-      }
-    }
+    // This function is now handled by the modular version in mechanics/nexus.js
+    // The modular version has proper turn tracking to prevent double damage
+    // We don't call the modular version here to prevent double damage
+    // The modular version is called from core/turn.js
   }
 
   /* ======================

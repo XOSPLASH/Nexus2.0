@@ -16,7 +16,9 @@ export const state = {
   abilityTargeting: null,
   unitIdCounter: 1,
   winner: null,
-  lastNexusDamageTurn: {}
+  lastNexusDamageTurn: {},
+  // Track last turn when per-player nexus damage was applied (1 damage max per owner per turn)
+  lastNexusPlayerDamageTurn: { 1: 0, 2: 0 }
 };
 
 export function uid() { 
@@ -39,6 +41,8 @@ export function resetState() {
   state.unitIdCounter = 1;
   state.winner = null;
   state.lastNexusDamageTurn = {};
+  // Reset per-player nexus damage turn tracker
+  state.lastNexusPlayerDamageTurn = { 1: 0, 2: 0 };
 }
 
 export function getPublicState() {

@@ -176,10 +176,14 @@
     }
 
     function setupEventHandlers() {
+      // Prevent duplicate event bindings across multiple initializeGame() calls
+      if (window.__NEXUS_EVENTS_BOUND) return;
+      window.__NEXUS_EVENTS_BOUND = true;
+
       const endTurnBtn = document.getElementById('endTurnBtn');
       const newGameBtn = document.getElementById('newGameBtn');
       const grid = document.getElementById('grid');
-      
+
       if (endTurnBtn) {
         endTurnBtn.addEventListener('click', () => {
           window.NexusCore.endTurn();
@@ -363,6 +367,12 @@
       window.NexusUI.renderHUD();
       window.NexusUI.populateShopForPlayer(window.NexusCore.state.currentPlayer);
       window.NexusUI.refreshSpawnHighlightsIfPending();
+      
+      // Re-render unit details so ability cooldown badges/disabled states update immediately after use
+      const st = window.NexusCore.state;
+      if (st && st.selectedUnit) {
+        window.NexusUI.showUnitDetailsForInstance(st.selectedUnit);
+      }
       
       // Update turn display
       const turnNumberEl = document.getElementById('turn-number');

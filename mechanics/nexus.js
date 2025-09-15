@@ -92,19 +92,20 @@ export function applyCaptureAndDamage() {
     }
   }
 
-  // Damage: for each nexus owned by a player, apply 1 damage to the opponent once per turn
+  // Damage: only nexuses owned by the player ending their turn deal damage now
+  // This prevents the same owner's nexuses from dealing damage again on the opponent's end turn
   for (let y = 0; y < BOARD_SIZE; y++) {
     for (let x = 0; x < BOARD_SIZE; x++) {
       const c = getCell(x, y);
       if (c && c.nexus && c.nexus.owner) {
         const owner = c.nexus.owner;
+        // Only apply damage for the player whose turn is ending (currentPlayer before switch)
+        if (owner !== state.currentPlayer) continue;
         const opponent = owner === 1 ? 2 : 1;
         const key = `${x},${y}`;
-        
         if (!state.lastNexusDamageTurn[key] || state.lastNexusDamageTurn[key] < state.turn) {
           state.players[opponent].hp = Math.max(0, state.players[opponent].hp - 1);
           state.lastNexusDamageTurn[key] = state.turn;
-          
           if (state.players[opponent].hp <= 0) {
             state.winner = owner;
           }
