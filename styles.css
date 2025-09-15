@@ -67,7 +67,7 @@ html,body { height:100%; margin:0; background: linear-gradient(180deg,#07111a 0%
 .unit-ability-btn .cd-badge { margin-left:6px; background: rgba(0,0,0,0.6); padding:2px 6px; border-radius:10px; font-size:11px; font-weight:800; color:#fff; }
 
 /* Board (center) */
-#boardPanel { display:flex; justify-content:center; align-items:flex-start; min-height:0; padding-top:48px; position:relative; }
+#boardPanel { display:flex; justify-content:center; align-items:flex-start; min-height:0; position:relative; }
 #instructionBanner { position:absolute; top:60px; left:50%; transform:translateX(-50%); background: rgba(120,80,200,0.18); color:#e8d8ff; border:1px solid rgba(160,100,255,0.35); padding:6px 10px; border-radius:10px; font-size:12px; font-weight:800; letter-spacing:0.2px; box-shadow:0 6px 14px rgba(0,0,0,0.35); z-index:30; }
 .grid { display:grid; gap:6px; padding:8px; border-radius:12px; background: linear-gradient(180deg,#031017,#04131c); box-shadow:0 8px 28px rgba(0,0,0,0.6); grid-template-columns: repeat(11, var(--cell-size)); grid-auto-rows: var(--cell-size); max-width: calc(var(--cell-size) * 11 + 6 * 10 + 16px); }
 
@@ -84,6 +84,10 @@ html,body { height:100%; margin:0; background: linear-gradient(180deg,#07111a 0%
 /* Markers (full cell visuals) */
 .marker-full { position:absolute; inset:6px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:24px; z-index:12; pointer-events:none; box-shadow: 0 10px 28px rgba(0,0,0,0.6), inset 0 2px 8px rgba(255,255,255,0.02); }
 .marker-full.nexus { background: linear-gradient(180deg,#042a3a,#01202b); color:#bfe9ff; }
+/* NEW: nexus owner color variants */
+.marker-full.nexus.neutral { background: linear-gradient(180deg,#2c2c2c,#1a1a1a); color:#e6e6e6; }
+.marker-full.nexus.owner-1 { background: radial-gradient(circle at 30% 30%, #2fa8ff, #004080); color:#dff7ff; box-shadow: 0 0 18px rgba(50,150,255,0.35), inset 0 0 10px rgba(255,255,255,0.1); }
+.marker-full.nexus.owner-2 { background: radial-gradient(circle at 30% 30%, #ff3a3a, #5a0c0c); color:#ffeaea; box-shadow: 0 0 18px rgba(255,60,60,0.35), inset 0 0 10px rgba(255,255,255,0.1); }
 .marker-full.spawner.player { background: linear-gradient(180deg,#083a63,#042841); color:#9fd8ff; }
 .marker-full.spawner.enemy { background: linear-gradient(180deg,#5a1a1a,#3a0a0a); color:#ff9f9f; }
 

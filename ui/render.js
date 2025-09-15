@@ -332,8 +332,11 @@ function computeReachable(unit, stepsOverride) {
       const cell = getCell(nx, ny);
       if (!cell) continue;
       
-      // can't move onto occupied or blocked
-      if (cell.unit || cell.nexus || cell.heart || cell.spawner) continue;
+      // can't move onto occupied or truly blocked markers (spawners/hearts). Nexuses are NOT blocking.
+      if (cell.unit || cell.heart || cell.spawner) continue;
+      if (cell.blockedForMovement) continue;
+      
+      // terrain restrictions (match UI rules)
       if (cell.terrain === 'water' && !(def.canMoveOnWater || unit.defId === 'naval') && cell.terrain !== 'bridge') continue;
       if (cell.terrain === 'mountain' && !def.canClimb) continue;
       
