@@ -7,7 +7,12 @@ export function showUnitDetailsForInstance(unit) {
 
   const UNIT_TYPES = window.UNIT_TYPES || {};
   const def = UNIT_TYPES[unit.defId] || {};
-  const abilities = def.abilities || [];
+
+  // Build mapping of abilities keeping original indices; only show non-passive
+  const rawAbilities = Array.isArray(def.abilities) ? def.abilities : [];
+  const activeAbilities = rawAbilities
+    .map((ab, i) => ({ ab, i }))
+    .filter(({ ab }) => ab && ab.type !== 'passive');
 
   // Basic stats header
   unitDetailsEl.classList.remove('empty');
@@ -22,15 +27,111 @@ export function showUnitDetailsForInstance(unit) {
     <div class="unit-ability-desc" id="unit-ability-desc"></div>
   `;
 
+  // Shared description element
+  const descEl = document.getElementById('unit-ability-desc');
+
+  // State refs
+  const st = window.NexusCore.state;
+  if (st.abilityTargeting && st.abilityTargeting.unitId !== unit.id) {
+    st.abilityTargeting = null;
+  }
+  st._pendingAbility = st._pendingAbility && st._pendingAbility.unitId === unit.id ? st._pendingAbility : null;
+
+  // Helper to render the description box content for an ability (by original index)
+  function renderDescFor(ab, origIdx, mode = 'review') {
+    if (!descEl || !ab) return;
+    const desc = ab.description || ab.text || ab.desc || 'No description available.';
+
+    const targetType = ab.target || 'auto';
+    const needsTarget = !['auto', 'self'].includes(targetType);
+
+    const stepText = needsTarget ? 'Step 2: Confirm to start targeting' : 'Step 2: Confirm to activate';
+    const confirmLabel = needsTarget ? 'Start Targeting' : 'Confirm';
+
+    if (mode === 'targeting') {
+      descEl.innerHTML = `
+        <div class="ability-title"><strong>${ab.name}</strong></div>
+        <div class="ability-text">Targeting active: select a valid target tile to use this ability.</div>
+        <div class="ability-confirm">
+          <span class="ability-steps">Targeting… Click a tile or Cancel.</span>
+          <button class="ability-cancel-btn" data-idx="${origIdx}">Cancel</button>
+        </div>
+      `;
+      descEl.classList.add('visible');
+      const cancelBtn = descEl.querySelector('.ability-cancel-btn');
+      if (cancelBtn) {
+        cancelBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          st.abilityTargeting = null;
+          st._pendingAbility = null;
+          const prevSelected = abilitiesContainer.querySelector('.unit-ability-btn.selected');
+          if (prevSelected) prevSelected.classList.remove('selected');
+          st._bannerText = '';
+          descEl.classList.remove('visible');
+          if (typeof window.updateUI === 'function') window.updateUI();
+        });
+      }
+      return;
+    }
+
+    // Review mode
+    descEl.innerHTML = `
+      <div class="ability-title"><strong>${ab.name}</strong></div>
+      <div class="ability-text">${desc}</div>
+      <div class="ability-confirm">
+        <span class="ability-steps">${stepText}</span>
+        <button class="ability-confirm-btn" data-idx="${origIdx}">${confirmLabel}</button>
+      </div>
+    `;
+    descEl.classList.add('visible');
+
+    const confirmBtn = descEl.querySelector('.ability-confirm-btn');
+    if (confirmBtn) {
+      confirmBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const cdLeft = (unit._cooldowns || {})[origIdx] || 0;
+        const isMyTurn = (window.NexusCore && st.currentPlayer === unit.owner);
+        const disabled = (unit.actionsLeft || 0) <= 0 || cdLeft > 0 || !isMyTurn;
+        if (disabled) return;
+
+        if (needsTarget) {
+          st.abilityTargeting = { unitId: unit.id, abilityIndex: origIdx, targetType };
+          st._bannerText = `Select a target for ${ab.name}`;
+          const prevSelected = abilitiesContainer.querySelector('.unit-ability-btn.selected');
+          if (prevSelected) prevSelected.classList.remove('selected');
+          const btn = abilitiesContainer.querySelector(`.unit-ability-btn[data-ability-index="${origIdx}"]`);
+          if (btn) btn.classList.add('selected');
+          renderDescFor(ab, origIdx, 'targeting');
+          if (typeof window.updateUI === 'function') window.updateUI();
+        } else {
+          if (window.NexusCore && typeof window.NexusCore.useAbility === 'function' && unit.actionsLeft > 0) {
+            const ok = window.NexusCore.useAbility(unit, origIdx);
+            if (ok) {
+              st._bannerText = `${ab.name} used!`;
+              if (typeof window.updateUI === 'function') window.updateUI();
+              setTimeout(() => {
+                st._bannerText = '';
+                descEl.classList.remove('visible');
+                const prevSelected = abilitiesContainer.querySelector('.unit-ability-btn.selected');
+                if (prevSelected) prevSelected.classList.remove('selected');
+                st._pendingAbility = null;
+                if (typeof window.updateUI === 'function') window.updateUI();
+              }, 900);
+            }
+          }
+        }
+      });
+    }
+  }
+
   // Abilities list
   abilitiesContainer.innerHTML = '';
-  abilities.slice(0, 2).forEach((ab, idx) => {
+  activeAbilities.slice(0, 2).forEach(({ ab, i: origIdx }) => {
     const btn = document.createElement('button');
     btn.className = 'unit-ability-btn';
-    btn.dataset.abilityIndex = String(idx);
+    btn.dataset.abilityIndex = String(origIdx);
 
-    // cooldown badge/disable
-    const cdLeft = (unit._cooldowns || {})[idx] || 0;
+    const cdLeft = (unit._cooldowns || {})[origIdx] || 0;
     const isMyTurn = (window.NexusCore && window.NexusCore.state.currentPlayer === unit.owner);
     const disabled = (unit.actionsLeft || 0) <= 0 || cdLeft > 0 || !isMyTurn;
     btn.disabled = !!disabled;
@@ -38,41 +139,48 @@ export function showUnitDetailsForInstance(unit) {
 
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      const state = window.NexusCore.state;
-      // Keep the unit selected
-      state.selectedUnit = unit;
 
-      // Do not write messages into unit info; description is fine
-      const descEl = document.getElementById('unit-ability-desc');
-      const desc = ab.description || ab.text || ab.desc || 'No description available.';
-      if (descEl) descEl.textContent = desc;
-
-      const targetType = ab.target || 'auto';
-      const needsTarget = !['auto','self'].includes(targetType);
-
-      // Clear any previous aim hints
-      state._aimHint = state._aimHint || {};
-      state._aimHint.text = '';
-
-      if (needsTarget) {
-        state.abilityTargeting = { unitId: unit.id, abilityIndex: idx, targetType };
+      // Toggle off if clicking the same pending ability
+      if (st._pendingAbility && st._pendingAbility.unitId === unit.id && st._pendingAbility.abilityIndex === origIdx) {
+        st._pendingAbility = null;
+        btn.classList.remove('selected');
+        if (descEl) descEl.classList.remove('visible');
+        st._bannerText = '';
         if (typeof window.updateUI === 'function') window.updateUI();
-      } else {
-        // Auto/self abilities execute immediately; show a banner instead of inline message
-        if (window.NexusCore && typeof window.NexusCore.useAbility === 'function' && unit.actionsLeft > 0) {
-          const ok = window.NexusCore.useAbility(unit, idx);
-          if (ok) {
-            state._bannerText = `${ab.name} used!`;
-            if (typeof window.updateUI === 'function') window.updateUI();
-            // clear banner after a short delay
-            setTimeout(() => { state._bannerText = ''; if (typeof window.updateUI === 'function') window.updateUI(); }, 900);
-          }
-        }
+        return;
       }
+
+      // New selection: clear previous selection/targeting
+      const prevSelected = abilitiesContainer.querySelector('.unit-ability-btn.selected');
+      if (prevSelected) prevSelected.classList.remove('selected');
+      st.abilityTargeting = null;
+      st._bannerText = '';
+
+      // Mark pending and show description
+      st.selectedUnit = unit;
+      st._pendingAbility = { unitId: unit.id, abilityIndex: origIdx };
+      btn.classList.add('selected');
+      renderDescFor(ab, origIdx, 'review');
+      if (typeof window.updateUI === 'function') window.updateUI();
     });
 
     abilitiesContainer.appendChild(btn);
   });
+
+  // After building buttons, reapply selection/desc based on current state
+  if (st.abilityTargeting && st.abilityTargeting.unitId === unit.id) {
+    const aIdx = st.abilityTargeting.abilityIndex;
+    const ab = rawAbilities[aIdx];
+    const selBtn = abilitiesContainer.querySelector(`.unit-ability-btn[data-ability-index="${aIdx}"]`);
+    if (selBtn) selBtn.classList.add('selected');
+    if (ab) renderDescFor(ab, aIdx, 'targeting');
+  } else if (st._pendingAbility && st._pendingAbility.unitId === unit.id) {
+    const aIdx = st._pendingAbility.abilityIndex;
+    const ab = rawAbilities[aIdx];
+    const selBtn = abilitiesContainer.querySelector(`.unit-ability-btn[data-ability-index="${aIdx}"]`);
+    if (selBtn) selBtn.classList.add('selected');
+    if (ab) renderDescFor(ab, aIdx, 'review');
+  }
 }
 
 export function showCellInfo(x, y) {
@@ -80,7 +188,6 @@ export function showCellInfo(x, y) {
   const c = window.NexusCore.getCell(x, y);
   if (!unitDetailsEl || !c) return;
 
-  // If unit present, delegate
   if (c.unit) return showUnitDetailsForInstance(c.unit);
 
   const name = (c.terrain || 'plain');
@@ -89,4 +196,10 @@ export function showCellInfo(x, y) {
   unitDetailsEl.innerHTML = `<div class="unit-name">${nice}</div><div class="unit-description">${c.nexus ? 'Nexus tile – can be captured.' : c.spawner ? 'Spawner – place adjacent to deploy.' : c.heart ? 'Heart – defend this!' : 'A terrain tile.'}</div>`;
   const abilitiesContainer = document.getElementById('unit-abilities');
   if (abilitiesContainer) abilitiesContainer.innerHTML = '';
+
+  const descEl = document.getElementById('unit-ability-desc');
+  if (descEl) {
+    descEl.classList.remove('visible');
+    descEl.innerHTML = '';
+  }
 }

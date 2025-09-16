@@ -17,6 +17,9 @@
   --forest: #254b2b;
   --mountain: #3b3b3b;
   --glass: rgba(255,255,255,0.03);
+  --ability-purple: rgba(120,80,200,0.18);
+  --ability-purple-border: rgba(160,100,255,0.35);
+  --ability-purple-text: #e8d8ff;
 
   --radius: 12px;
 
@@ -61,10 +64,77 @@ html,body { height:100%; margin:0; background: linear-gradient(180deg,#07111a 0%
 
 .unit-stat { display:flex; justify-content:space-between; padding:6px 8px; border-radius:6px; margin-bottom:4px; background: rgba(255,255,255,0.01); }
 .unit-stat-label { color:var(--muted); font-size:12px; }
-.unit-abilities { display:flex; gap:8px; flex-wrap:wrap; }
-.unit-ability-btn { padding:6px 8px; border-radius:8px; border:1px solid rgba(255,255,255,0.04); background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02)); color:#eaf8ff; cursor:pointer; font-weight:700; font-size:12px; }
-.unit-ability-btn[disabled] { opacity:0.6; cursor:not-allowed; }
-.unit-ability-btn .cd-badge { margin-left:6px; background: rgba(0,0,0,0.6); padding:2px 6px; border-radius:10px; font-size:11px; font-weight:800; color:#fff; }
+
+/* Ability styles */
+.unit-abilities { display:flex; gap:8px; flex-wrap:wrap; margin-bottom: 8px; }
+.unit-ability-btn { 
+  padding: 6px 8px; 
+  border-radius: 8px; 
+  border: 1px solid rgba(255,255,255,0.04); 
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02)); 
+  color: #eaf8ff; 
+  cursor: pointer; 
+  font-weight: 700; 
+  font-size: 12px;
+  position: relative;
+  min-width: 80px;
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s, color 0.2s;
+}
+
+.unit-ability-btn:hover:not([disabled]) {
+  border-color: var(--ability-purple-border);
+  box-shadow: 0 4px 12px rgba(160,100,255,0.15);
+  background: var(--ability-purple);
+  color: var(--ability-purple-text);
+}
+
+.unit-ability-btn.selected {
+  background: var(--ability-purple);
+  border-color: var(--ability-purple-border);
+  color: var(--ability-purple-text);
+  box-shadow: 0 4px 12px rgba(160,100,255,0.25);
+}
+
+.unit-ability-btn[disabled] { 
+  opacity: 0.6; 
+  cursor: not-allowed; 
+}
+
+.unit-ability-btn .cd-badge { 
+  margin-left: 6px; 
+  background: rgba(0,0,0,0.6); 
+  padding: 2px 6px; 
+  border-radius: 10px; 
+  font-size: 11px; 
+  font-weight: 800; 
+  color: #fff; 
+}
+
+.unit-ability-desc {
+  background: var(--ability-purple);
+  border: 1px solid var(--ability-purple-border);
+  color: var(--ability-purple-text);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  margin-top: 8px;
+  box-shadow: 0 4px 12px rgba(160,100,255,0.15);
+  transition: opacity 0.2s, max-height 0.2s, visibility 0.2s;
+  opacity: 0;
+  max-height: 0;
+  visibility: hidden;
+  overflow: hidden;
+  margin-bottom: 0;
+}
+
+.unit-ability-desc.visible {
+  opacity: 1;
+  max-height: 200px;
+  visibility: visible;
+  margin-bottom: 8px;
+}
 
 /* Board (center) */
 #boardPanel { display:flex; justify-content:center; align-items:flex-start; min-height:0; position:relative; }
@@ -187,3 +257,28 @@ html,body { height:100%; margin:0; background: linear-gradient(180deg,#07111a 0%
   #mainArea { grid-template-columns: 220px 1fr 200px; }
   #controlsRow { grid-template-columns: 220px 1fr 200px; }
 }
+
+/* Ability description rich content */
+.unit-ability-desc .ability-title { font-weight:800; margin-bottom:6px; color: #f0e6ff; }
+.unit-ability-desc .ability-text { color: var(--ability-purple-text); opacity: 0.95; margin-bottom: 8px; }
+.unit-ability-desc .ability-confirm { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.unit-ability-desc .ability-steps { font-size:12px; color:#e8d8ff; opacity:0.9; }
+.unit-ability-desc .ability-confirm-btn,
+.unit-ability-desc .ability-cancel-btn { 
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--ability-purple-border);
+  background: rgba(255,255,255,0.06);
+  color: #f6efff;
+  font-weight: 800;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+}
+.unit-ability-desc .ability-confirm-btn:hover,
+.unit-ability-desc .ability-cancel-btn:hover {
+  background: var(--ability-purple);
+  color: var(--ability-purple-text);
+  box-shadow: 0 4px 12px rgba(160,100,255,0.2);
+}
+.unit-ability-desc .ability-cancel-btn { opacity: 0.9; }
