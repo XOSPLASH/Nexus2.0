@@ -16,6 +16,7 @@ export function showUnitDetailsForInstance(unit) {
 
   // Basic stats header
   unitDetailsEl.classList.remove('empty');
+  unitDetailsEl.classList.remove('cell-info');
   unitDetailsEl.innerHTML = `
     <div class="unit-name">${def.name || unit.name || unit.defId}</div>
     <div class="unit-description">${def.description || ''}</div>
@@ -190,16 +191,42 @@ export function showCellInfo(x, y) {
 
   if (c.unit) return showUnitDetailsForInstance(c.unit);
 
-  const name = (c.terrain || 'plain');
-  const nice = name.charAt(0).toUpperCase() + name.slice(1);
-  unitDetailsEl.classList.add('empty');
-  unitDetailsEl.innerHTML = `<div class="unit-name">${nice}</div><div class="unit-description">${c.nexus ? 'Nexus tile – can be captured.' : c.spawner ? 'Spawner – place adjacent to deploy.' : c.heart ? 'Heart – defend this!' : 'A terrain tile.'}</div>`;
+  // Determine title and description based on markers/terrain
+  let title = '';
+  let desc = '';
+  if (c.nexus) {
+    title = 'Nexus';
+    desc = 'Capture and control objective.';
+  } else if (c.spawner) {
+    title = 'Spawner';
+    desc = 'Deploy units adjacent to this tile.';
+  } else if (c.heart) {
+    title = 'Heart';
+    desc = 'Your core structure. If it falls, you lose.';
+  } else {
+    const t = c.terrain || 'plain';
+    title = t.charAt(0).toUpperCase() + t.slice(1);
+    switch (t) {
+      case 'water': desc = 'Most units cannot cross; build a bridge or use special movement.'; break;
+      case 'forest': desc = 'Dense terrain.'; break;
+      case 'mountain': desc = 'Impassable to most units.'; break;
+      case 'bridge': desc = 'A built crossing over water.'; break;
+      default: desc = 'Open ground.'; break;
+    }
+  }
+
+  // Update left panel (UNIT INFO) with centered title and description
+  unitDetailsEl.classList.remove('empty');
+  unitDetailsEl.classList.add('cell-info');
+  unitDetailsEl.innerHTML = `
+    <div class="unit-name">${title}</div>
+    <div class="unit-description">${desc}</div>
+  `;
+
   const abilitiesContainer = document.getElementById('unit-abilities');
   if (abilitiesContainer) abilitiesContainer.innerHTML = '';
-
   const descEl = document.getElementById('unit-ability-desc');
-  if (descEl) {
-    descEl.classList.remove('visible');
-    descEl.innerHTML = '';
-  }
+  if (descEl) { descEl.classList.remove('visible'); descEl.innerHTML = ''; }
+
+  // Removed grid overlays: render only inside UNIT INFO per request
 }

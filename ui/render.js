@@ -127,7 +127,7 @@ export function renderBoard() {
       if (c.spawner) {
         const el = document.createElement('div'); 
         el.className = 'marker-full spawner';
-        el.textContent = '⛔';
+        el.textContent = '⚙';
         if (c.spawner.owner === 1) el.classList.add('player');
         else if (c.spawner.owner === 2) el.classList.add('enemy');
         cellEl.appendChild(el);
