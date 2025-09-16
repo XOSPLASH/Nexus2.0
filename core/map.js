@@ -19,14 +19,15 @@ function sampleTerrain() {
 
 export function generateSymmetricMapWithDensity() {
   // Repeated attempts to ensure reasonable density/clustered features
-  for (let attempt = 0; attempt < 12; attempt++) {
+  for (let attempt = 0; attempt < 30; attempt++) {
     initBoard();
     const half = Math.floor(BOARD_SIZE / 2);
 
     // top half random
     for (let y = 0; y < half; y++) {
       for (let x = 0; x < BOARD_SIZE; x++) {
-        if (Math.random() < 0.65) state.board[y][x].terrain = sampleTerrain();
+        // Increase terrain fill probability to reduce overly open maps
+        if (Math.random() < 0.85) state.board[y][x].terrain = sampleTerrain();
         else state.board[y][x].terrain = 'plain';
       }
     }
@@ -42,12 +43,12 @@ export function generateSymmetricMapWithDensity() {
     if (BOARD_SIZE % 2 === 1) {
       const y = half;
       for (let x = 0; x < half; x++) {
-        const t = (Math.random() < 0.22) ? sampleTerrain() : 'plain';
+        const t = (Math.random() < 0.35) ? sampleTerrain() : 'plain';
         state.board[y][x].terrain = t;
         state.board[y][BOARD_SIZE - 1 - x].terrain = t;
       }
       // middle cell maps to itself
-      state.board[y][half].terrain = (Math.random() < 0.22) ? sampleTerrain() : 'plain';
+      state.board[y][half].terrain = (Math.random() < 0.35) ? sampleTerrain() : 'plain';
     }
 
     // simple smoothing passes
@@ -96,16 +97,16 @@ export function generateSymmetricMapWithDensity() {
       }
     }
     const nonPlain = totalCells - counts.plain;
-    const nonPlainRatio = nonPlain / totalCells; // target ~45%
+    const nonPlainRatio = nonPlain / totalCells; // target ~80% (denser terrain, less open space)
     const waterRatio = counts.water / totalCells;
     const forestRatio = counts.forest / totalCells;
     const mountainRatio = counts.mountain / totalCells;
 
     const ok = (
-      nonPlainRatio >= 0.55 && nonPlainRatio <= 0.65 &&
-      waterRatio >= 0.14 && waterRatio <= 0.26 &&
-      forestRatio >= 0.14 && forestRatio <= 0.26 &&
-      mountainRatio >= 0.12 && mountainRatio <= 0.18
+      nonPlainRatio >= 0.72 && nonPlainRatio <= 0.88 &&
+      waterRatio >= 0.18 && waterRatio <= 0.35 &&
+      forestRatio >= 0.18 && forestRatio <= 0.35 &&
+      mountainRatio >= 0.14 && mountainRatio <= 0.25
     );
 
     if (ok) break;
