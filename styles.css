@@ -227,7 +227,7 @@ html,body { height:100%; margin:0; background: linear-gradient(180deg,#07111a 0%
 
 /* Ensure overlays stack above base highlights but below units */
 .cell { position: relative; }
-.unit-el { position: relative; z-index: 3; }
+.unit-el { position: relative; z-index: 20; }
 /* Base overlay box: absolute, inset within cell, solid border radius matching cells */
 .highlight-overlay {
   position: absolute;

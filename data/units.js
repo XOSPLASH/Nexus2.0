@@ -25,7 +25,7 @@ export const UNIT_TYPES = {
     description: 'Ranged unit – stays back and fires far.',
     cost: 4,
     hp: 4,
-    atk: 2,
+    atk: 4,
     range: 3,
     move: 2,
     abilities: [

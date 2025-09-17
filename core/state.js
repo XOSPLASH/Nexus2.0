@@ -7,8 +7,8 @@ export const state = {
   turn: 1,
   currentPlayer: 1,
   players: {
-    1: { hp: 20, energy: 10, energyTurnsUsed: 0, purchased: new Set(), spawner: null, heart: null },
-    2: { hp: 20, energy: 10, energyTurnsUsed: 0, purchased: new Set(), spawner: null, heart: null }
+    1: { hp: 20, energy: 5, energyTurnsUsed: 0, purchased: new Set(), spawner: null, heart: null },
+    2: { hp: 20, energy: 5, energyTurnsUsed: 0, purchased: new Set(), spawner: null, heart: null }
   },
   nexuses: [],
   selectedUnit: null,
@@ -31,8 +31,8 @@ export function resetState() {
   state.turn = 1;
   state.currentPlayer = 1;
   state.players = {
-    1: { hp: 20, energy: 10, energyTurnsUsed: 0, purchased: new Set(), spawner: null, heart: null },
-    2: { hp: 20, energy: 10, energyTurnsUsed: 0, purchased: new Set(), spawner: null, heart: null }
+    1: { hp: 20, energy: 5, energyTurnsUsed: 0, purchased: new Set(), spawner: null, heart: null },
+    2: { hp: 20, energy: 5, energyTurnsUsed: 0, purchased: new Set(), spawner: null, heart: null }
   };
   state.nexuses = [];
   state.selectedUnit = null;

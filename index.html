@@ -281,6 +281,8 @@
             const stillTargeting = window.NexusCore.state.abilityTargeting && window.NexusCore.state.abilityTargeting.phase === 'charge_move' && window.NexusCore.state.abilityTargeting.unitId === unitRef.id;
             if (!stillTargeting) {
               state.abilityTargeting = null;
+              // Also clear any pending ability selection so the purple box is hidden immediately after use
+              state._pendingAbility = null;
             }
             // show banner for ability used if set
             if (!state._bannerText || state._bannerText.length === 0) {

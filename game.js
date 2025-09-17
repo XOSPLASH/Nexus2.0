@@ -48,8 +48,8 @@
   const state = {
     board: [], // 2D array
     players: {
-      1: { hp: 20, energy: 10, energyTurnsUsed: 0, purchased: new Set() },
-      2: { hp: 20, energy: 10, energyTurnsUsed: 0, purchased: new Set() }
+      1: { hp: 20, energy: 5, energyTurnsUsed: 0, purchased: new Set() },
+      2: { hp: 20, energy: 5, energyTurnsUsed: 0, purchased: new Set() }
     },
     currentPlayer: 1,
     turnNumber: 1,
@@ -962,8 +962,8 @@
     state.unitIdCounter = 1;
     state.selectedUnit = null;
     state.pendingShopSelection = { 1: null, 2: null };
-    state.players[1] = { hp: 20, energy: 10, energyTurnsUsed: 0, purchased: new Set() };
-    state.players[2] = { hp: 20, energy: 10, energyTurnsUsed: 0, purchased: new Set() };
+    state.players[1] = { hp: 20, energy: 5, energyTurnsUsed: 0, purchased: new Set() };
+    state.players[2] = { hp: 20, energy: 5, energyTurnsUsed: 0, purchased: new Set() };
     state.currentPlayer = 1;
     state.turnNumber = 1;
     state.lastNexusDamageTurn = {};
