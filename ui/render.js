@@ -38,6 +38,7 @@ export function renderBoard() {
   let abilityUnitRef = null;
   let abilityName = '';
   let abilityInstruction = '';
+  let isVolleyAbility = false;
   if (abilityTargeting) {
     // find unit reference once
     for (let yy = 0; yy < state.board.length; yy++) {
@@ -58,11 +59,14 @@ export function renderBoard() {
       else if (t === 'adjacent_friendly') abilityInstruction = `Click an adjacent friendly to use ${abilityName}.`;
       else if (t === 'adjacent_enemy') abilityInstruction = `Click an adjacent enemy to use ${abilityName}.`;
       else if (t === 'adjacent_water') abilityInstruction = `Click an adjacent water tile to use ${abilityName}.`;
+      else if (t === 'charge_move') abilityInstruction = `Choose an adjacent empty tile to move (1 step).`;
       else abilityInstruction = `Choose a valid target for ${abilityName}.`;
       // Override with tailored hint if available
       try {
         if (state._aimHint && state._aimHint.text) abilityInstruction = state._aimHint.text;
       } catch (e) { /* ignore */ }
+      // detect volley
+      isVolleyAbility = !!(ab && ab.name && String(ab.name).toLowerCase().includes('volley'));
     }
     gridEl.classList.add('aim-mode');
   } else {
@@ -236,6 +240,16 @@ export function renderBoard() {
             show = inRange;
           }
           useOverlay = show;
+
+          // Visible boundary ring for Volley: outer limit tiles
+          if (isVolleyAbility) {
+            const isBoundary = canDiag ? (chebyshev === range) : (manhattan === range);
+            if (isBoundary) {
+              const boundary = document.createElement('div');
+              boundary.className = 'highlight-overlay highlight-volley-boundary';
+              cellEl.appendChild(boundary);
+            }
+          }
         } else if (t === 'manhattan_2_enemy') {
           const dist = Math.abs(abilityUnitRef.x - x) + Math.abs(abilityUnitRef.y - y);
           show = dist <= 2; useOverlay = show;
@@ -246,6 +260,12 @@ export function renderBoard() {
         } else if (t === 'adjacent_water') {
           const cell = getCell(x, y);
           show = Math.abs(abilityUnitRef.x - x) <= 1 && Math.abs(abilityUnitRef.y - y) <= 1 && cell && cell.terrain === 'water'; useOverlay = show;
+        } else if (t === 'charge_move') {
+          const ddef = (UNIT_TYPES[abilityUnitRef.defId] || {});
+          const cell = getCell(x, y);
+          const adj = Math.abs(abilityUnitRef.x - x) + Math.abs(abilityUnitRef.y - y) === 1;
+          show = !!(adj && cell && !cell.unit && !cell.blockedForMovement && !(cell.terrain === 'mountain' && !ddef.canClimbMountain) && !(cell.terrain === 'water' && !ddef.canCrossWater && !ddef.waterOnly && cell.terrain !== 'bridge'));
+          useOverlay = show;
         }
 
         if (useOverlay) {

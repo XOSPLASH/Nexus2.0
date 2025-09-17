@@ -235,27 +235,45 @@ export function useAbility(unit, abilityIndex, targetX = null, targetY = null) {
     return true;
   };
 
-  // Soldier: Charge (move 1 toward nearest enemy, then attack if in range)
-  if (unit.defId === 'soldier' && name.includes('charge')) {
-    if (nearestEnemy) {
-      const dx = Math.sign(nearestEnemy.x - unit.x);
-      const dy = Math.sign(nearestEnemy.y - unit.y);
-      const candidates = [];
-      if (dx !== 0 && dy !== 0) candidates.push({ x: unit.x + dx, y: unit.y + dy });
-      if (dx !== 0) candidates.push({ x: unit.x + dx, y: unit.y });
-      if (dy !== 0) candidates.push({ x: unit.x, y: unit.y + dy });
-      for (const c of candidates) { if (tryManualStep(c.x, c.y)) break; }
-      // attempt attack on nearest enemy if now within range
-      if (canAttack(unit, nearestEnemy.x, nearestEnemy.y)) {
-        const ok = attackUnit(unit, nearestEnemy.x, nearestEnemy.y);
-        if (ok) applyCooldownAndFlash();
-        return ok;
-      }
+  // Soldier: Charge two-phase
+  // Phase 2 handler: after a successful attack, allow choosing an adjacent empty tile to move (does NOT consume extra action)
+  if (unit.defId === 'soldier' && name.includes('charge') && state.abilityTargeting && state.abilityTargeting.phase === 'charge_move' && state.abilityTargeting.unitId === unit.id) {
+    if (targetX == null || targetY == null) return false;
+    // must move exactly 1 orthogonal step into a valid empty tile
+    if (Math.abs(unit.x - targetX) + Math.abs(unit.y - targetY) !== 1) return false;
+    const moved = tryManualStep(targetX, targetY);
+    if (moved) {
+      // complete the move phase; cooldown already applied during attack phase
+      state.abilityTargeting = null;
+      return true;
     }
-    // consume action even if no target in range after step
-    unit.actionsLeft = Math.max(0, (unit.actionsLeft || 0) - 1);
-    applyCooldownAndFlash();
-    return true;
+    return false;
+  }
+
+  // Soldier: Charge (Phase 1 - attack selected enemy in range, then enter move phase)
+  if (unit.defId === 'soldier' && name.includes('charge')) {
+    // If explicit target provided, attempt attack
+    if (targetX != null && targetY != null) {
+      const ok = attackUnit(unit, targetX, targetY);
+      if (ok) {
+        applyCooldownAndFlash();
+        // enter move phase without consuming another action
+        try {
+          state.abilityTargeting = { unitId: unit.id, abilityIndex, targetType: 'charge_move', phase: 'charge_move' };
+        } catch (e) {}
+      }
+      return ok;
+    }
+    // Fallback (e.g., AI): attack nearest enemy if already in range
+    if (nearestEnemy && canAttack(unit, nearestEnemy.x, nearestEnemy.y)) {
+      const ok = attackUnit(unit, nearestEnemy.x, nearestEnemy.y);
+      if (ok) {
+        applyCooldownAndFlash();
+        try { state.abilityTargeting = { unitId: unit.id, abilityIndex, targetType: 'charge_move', phase: 'charge_move' }; } catch (e) {}
+      }
+      return ok;
+    }
+    return false;
   }
 
   // Archer: Volley (3x3 AoE centered on target cell within range)

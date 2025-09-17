@@ -175,6 +175,30 @@ export function showUnitDetailsForInstance(unit) {
     const selBtn = abilitiesContainer.querySelector(`.unit-ability-btn[data-ability-index="${aIdx}"]`);
     if (selBtn) selBtn.classList.add('selected');
     if (ab) renderDescFor(ab, aIdx, 'targeting');
+    // If we're in Soldier Charge move phase, override text to be explicit
+    if (st.abilityTargeting.phase === 'charge_move' && descEl) {
+      descEl.innerHTML = `
+        <div class="ability-title"><strong>${ab.name}</strong></div>
+        <div class="ability-text">Charge: choose an adjacent empty tile to move 1 step.</div>
+        <div class="ability-confirm">
+          <span class="ability-steps">Targeting… Click a tile or Cancel.</span>
+          <button class="ability-cancel-btn" data-idx="${aIdx}">Cancel</button>
+        </div>
+      `;
+      const cancelBtn = descEl.querySelector('.ability-cancel-btn');
+      if (cancelBtn) {
+        cancelBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          st.abilityTargeting = null;
+          st._pendingAbility = null;
+          const prevSelected = abilitiesContainer.querySelector('.unit-ability-btn.selected');
+          if (prevSelected) prevSelected.classList.remove('selected');
+          st._bannerText = '';
+          descEl.classList.remove('visible');
+          if (typeof window.updateUI === 'function') window.updateUI();
+        });
+      }
+    }
   } else if (st._pendingAbility && st._pendingAbility.unitId === unit.id) {
     const aIdx = st._pendingAbility.abilityIndex;
     const ab = rawAbilities[aIdx];

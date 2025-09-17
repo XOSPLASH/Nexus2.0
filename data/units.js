@@ -13,7 +13,7 @@ export const UNIT_TYPES = {
     range: 1,
     move: 2,
     abilities: [
-      { name: 'Charge', type: 'active', text: 'Move 1 and attack an adjacent enemy.', cooldown: 2, target: 'auto' },
+      { name: 'Charge', type: 'active', text: 'Attack an enemy in range, then move 1 to an adjacent tile.', cooldown: 2, target: 'enemy_in_range' },
       { name: 'Resolute', type: 'passive', text: 'Takes slightly less damage (flavor).' }
     ]
   },

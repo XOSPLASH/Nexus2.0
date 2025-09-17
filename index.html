@@ -277,7 +277,11 @@
           
           const ok = window.NexusCore.useAbility(unitRef, at.abilityIndex, targetX, targetY);
           if (ok) {
-            state.abilityTargeting = null;
+            // For Soldier Charge, the ability may transition into a move phase (charge_move)
+            const stillTargeting = window.NexusCore.state.abilityTargeting && window.NexusCore.state.abilityTargeting.phase === 'charge_move' && window.NexusCore.state.abilityTargeting.unitId === unitRef.id;
+            if (!stillTargeting) {
+              state.abilityTargeting = null;
+            }
             // show banner for ability used if set
             if (!state._bannerText || state._bannerText.length === 0) {
               const UNIT_TYPES = window.UNIT_TYPES || {};

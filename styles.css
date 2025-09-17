@@ -214,14 +214,44 @@ html,body { height:100%; margin:0; background: linear-gradient(180deg,#07111a 0%
 .unit-el.owner-2 .unit-actions { background: rgba(200,50,50,0.8); }
 
 /* Highlights */
-.cell .highlight-overlay { position:absolute; inset:0; border-radius:8px; pointer-events:none; z-index:14; }
-/* NEW: switch to neon border effects instead of full recolor */
-.highlight-move { background: transparent; outline: 2px solid rgba(100,255,160,0.85); box-shadow: 0 0 10px rgba(80,240,160,0.45), inset 0 0 8px rgba(60,220,120,0.25); }
-.highlight-attack { background: transparent; outline: 2px solid rgba(255,80,80,0.9); box-shadow: 0 0 10px rgba(255,60,60,0.45), inset 0 0 8px rgba(255,60,60,0.25); }
-.highlight-attack-ortho { background: transparent; outline: 2px solid rgba(255,70,70,0.95); box-shadow: 0 0 10px rgba(255,70,70,0.45), inset 0 0 8px rgba(255,50,50,0.25); }
-.highlight-attack-diag  { background: transparent; outline: 2px dashed rgba(255,140,80,0.95); box-shadow: 0 0 10px rgba(255,140,80,0.45), inset 0 0 8px rgba(255,130,70,0.2); }
-.highlight-ability { background: transparent; outline: 2px solid rgba(180,100,255,0.95); box-shadow: 0 0 10px rgba(160,90,255,0.45), inset 0 0 8px rgba(160,90,255,0.25); }
-.spawn-highlight { background: transparent; outline: 2px dashed rgba(220,200,60,0.95); box-shadow: 0 0 10px rgba(220,200,60,0.35), inset 0 0 8px rgba(220,200,60,0.2); }
+.highlight-overlay.highlight-volley-boundary {
+  position: absolute;
+  inset: 2px;
+  /* unify with solid cell border styling */
+  outline: 2px solid rgba(255, 215, 0, 0.95);
+  border-radius: 10px;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  box-shadow: 0 0 6px rgba(255, 215, 0, 0.8);
+}
+
+/* Ensure overlays stack above base highlights but below units */
+.cell { position: relative; }
+.unit-el { position: relative; z-index: 3; }
+/* Base overlay box: absolute, inset within cell, solid border radius matching cells */
+.highlight-overlay {
+  position: absolute;
+  inset: 2px;
+  z-index: 2;
+  border-radius: 8px;
+  pointer-events: none;
+}
+.highlight-move { background: transparent; border: 2px solid rgba(100,255,160,0.92); box-shadow: 0 0 10px rgba(80,240,160,0.45), inset 0 0 8px rgba(60,220,120,0.25); }
+.highlight-attack { background: transparent; border: 2px solid rgba(255,80,80,0.95); box-shadow: 0 0 10px rgba(255,60,60,0.45), inset 0 0 8px rgba(255,60,60,0.25); }
+.highlight-attack-ortho { background: transparent; border: 2px solid rgba(255,70,70,0.98); box-shadow: 0 0 10px rgba(255,70,70,0.45), inset 0 0 8px rgba(255,50,50,0.25); }
+/* Restore consistent solid borders */
+.highlight-attack-diag  { background: transparent; border: 2px solid rgba(255,140,80,0.98); box-shadow: 0 0 10px rgba(255,140,80,0.45), inset 0 0 8px rgba(255,130,70,0.2); }
+.highlight-ability { background: transparent; border: 2px solid rgba(180,100,255,0.98); box-shadow: 0 0 10px rgba(160,90,255,0.45), inset 0 0 8px rgba(160,90,255,0.25); }
+/* Spawning uses solid border style for consistency */
+.spawn-highlight { background: transparent; border: 2px solid rgba(220,200,60,0.98); box-shadow: 0 0 10px rgba(220,200,60,0.35), inset 0 0 8px rgba(220,200,60,0.2); }
+
+/* Volley boundary ring uses solid border */
+.highlight-overlay.highlight-volley-boundary {
+  border: 2px solid rgba(255, 215, 0, 0.95);
+  border-radius: 8px;
+  mix-blend-mode: screen;
+  box-shadow: 0 0 6px rgba(255, 215, 0, 0.8);
+}
 
 /* Attack effects */
 .unit-el.attackable-target { animation: attackPulse 1.2s ease-in-out infinite; box-shadow: 0 0 12px rgba(255,40,40,0.6); outline:2px solid rgba(255,70,70,0.7); }
