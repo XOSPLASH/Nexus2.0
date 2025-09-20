@@ -138,7 +138,7 @@ html,body { height:100%; margin:0; background: linear-gradient(180deg,#07111a 0%
 }
 
 /* Board (center) */
-#boardPanel { display:flex; justify-content:center; align-items:flex-start; min-height:0; position:relative; }
+#boardPanel { display:flex; justify-content:center; align-items:flex-start; min-height:0; position:relative; padding-right:140px; }
 #instructionBanner { position:absolute; top:60px; left:50%; transform:translateX(-50%); background: rgba(120,80,200,0.18); color:#e8d8ff; border:1px solid rgba(160,100,255,0.35); padding:6px 10px; border-radius:10px; font-size:12px; font-weight:800; letter-spacing:0.2px; box-shadow:0 6px 14px rgba(0,0,0,0.35); z-index:30; }
 .grid { display:grid; gap:6px; padding:8px; border-radius:12px; background: linear-gradient(180deg,#031017,#04131c); box-shadow:0 8px 28px rgba(0,0,0,0.6); grid-template-columns: repeat(11, var(--cell-size)); grid-auto-rows: var(--cell-size); max-width: calc(var(--cell-size) * 11 + 6 * 10 + 16px); }
 
@@ -198,6 +198,19 @@ html,body { height:100%; margin:0; background: linear-gradient(180deg,#07111a 0%
   box-shadow:
     0 0 18px rgba(255,60,60,0.6),
     inset 0 0 10px rgba(255,255,255,0.15);
+}
+
+/* Heart HP badge */
+.heart-hp {
+  position: absolute;
+  right: -8px;
+  bottom: -8px;
+  background: rgba(0,0,0,0.7);
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  color: #fff;
+  z-index: 22;
 }
 
 /* Units */
@@ -332,8 +345,8 @@ html,body { height:100%; margin:0; background: linear-gradient(180deg,#07111a 0%
 /* Realm toggle button */
 .realm-toggle {
   position: absolute;
-  right: -120px; /* sits to the right of the grid area */
-  top: 0;
+  right: 10px;
+  top: 8px;
   padding: 8px 12px;
   background: #1e1b2b;
   color: #d7c9ff;

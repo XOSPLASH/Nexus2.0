@@ -207,6 +207,13 @@ export function useAbility(unit, abilityIndex, targetX = null, targetY = null) {
     unit.realm = toRealm;
     setRealmUnit(cell, toRealm, unit);
 
+    // Auto-return after 1 turn when entering shadow; clear when exiting
+    if (toRealm === 'shadow') {
+      unit._shadowReturnOnTurn = state.turn + 1;
+    } else {
+      delete unit._shadowReturnOnTurn;
+    }
+
     // Apply cooldown and consume action
     unit._cooldowns['Vanish'] = ability.cooldown || 3;
     unit.actionsLeft = Math.max(0, (unit.actionsLeft || 0) - 1);

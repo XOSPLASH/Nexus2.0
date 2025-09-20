@@ -324,26 +324,28 @@
       }
 
       // Handle unit selection and commands
-      if (cell.unit) {
-        if (cell.unit.owner === state.currentPlayer) {
-          // Select friendly unit
-          if (state.selectedUnit && state.selectedUnit.id === cell.unit.id) {
+      const view = state.viewRealm || 'overworld';
+      const uHere = (view === 'shadow') ? cell.shadowUnit : cell.unit;
+      if (uHere) {
+        if (uHere.owner === state.currentPlayer) {
+          // Select friendly unit (realm-aware)
+          if (state.selectedUnit && state.selectedUnit.id === uHere.id) {
             state.selectedUnit = null;
           } else {
-            state.selectedUnit = cell.unit;
+            state.selectedUnit = uHere;
           }
-          window.NexusUI.showUnitDetailsForInstance(cell.unit);
+          window.NexusUI.showUnitDetailsForInstance(uHere);
           updateUI();
           return;
         } else if (state.selectedUnit) {
-          // Attack enemy unit
+          // Attack enemy unit in same realm (core enforces realm match)
           const success = window.NexusCore.attackUnit(state.selectedUnit, x, y);
           if (success) {
             updateUI();
             return;
           }
         }
-        window.NexusUI.showUnitDetailsForInstance(cell.unit);
+        window.NexusUI.showUnitDetailsForInstance(uHere);
         return;
       }
 

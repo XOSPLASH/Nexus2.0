@@ -48,25 +48,48 @@ export function endTurn() {
     // fail-safe: ignore check errors
   }
 
-  // reset actions for new player's units and decrement cooldowns ONLY for the player whose turn just started
+  // Auto-exit: bring back shadow realm units that have expired stay (owner's turn start)
   for (let y = 0; y < state.board.length; y++) {
     for (let x = 0; x < state.board[0].length; x++) {
       const cell = getCell(x, y);
-      if (cell && cell.unit) {
-        // expire temporary move bonuses every turn
-        if (cell.unit._tempMoveBonus) cell.unit._tempMoveBonus = 0;
-        // expire stealth if duration passed
-        if (cell.unit.hiddenUntilTurn && state.turn >= cell.unit.hiddenUntilTurn) {
-          delete cell.unit.hiddenUntilTurn;
+      if (!cell || !cell.shadowUnit) continue;
+      const u = cell.shadowUnit;
+      if (u.owner !== state.currentPlayer) continue;
+      if (u._shadowReturnOnTurn && state.turn >= u._shadowReturnOnTurn) {
+        // return to overworld if slot free
+        if (!cell.unit) {
+          cell.shadowUnit = null;
+          u.realm = 'overworld';
+          cell.unit = u;
+          delete u._shadowReturnOnTurn;
         }
-        // Decrement cooldowns and grant actions only for units of the player who is about to act
-        if (cell.unit.owner === state.currentPlayer) {
-          if (cell.unit._cooldowns) {
-            for (const k in cell.unit._cooldowns) {
-              cell.unit._cooldowns[k] = Math.max(0, (cell.unit._cooldowns[k] || 0) - 1);
+      }
+    }
+  }
+
+  // reset actions for new player's units (both realms) and decrement cooldowns ONLY for the player whose turn just started
+  for (let y = 0; y < state.board.length; y++) {
+    for (let x = 0; x < state.board[0].length; x++) {
+      const cell = getCell(x, x) || getCell(x, y); // ensure valid cell reference
+      const c = getCell(x, y);
+      if (!c) continue;
+      const units = [];
+      if (c.unit) units.push(c.unit);
+      if (c.shadowUnit) units.push(c.shadowUnit);
+      for (const u of units) {
+        // expire temporary move bonuses every turn
+        if (u._tempMoveBonus) u._tempMoveBonus = 0;
+        // expire stealth if duration passed
+        if (u.hiddenUntilTurn && state.turn >= u.hiddenUntilTurn) {
+          delete u.hiddenUntilTurn;
+        }
+        if (u.owner === state.currentPlayer) {
+          if (u._cooldowns) {
+            for (const k in u._cooldowns) {
+              u._cooldowns[k] = Math.max(0, (u._cooldowns[k] || 0) - 1);
             }
           }
-          cell.unit.actionsLeft = ACTIONS_PER_TURN;
+          u.actionsLeft = ACTIONS_PER_TURN;
         }
       }
     }
