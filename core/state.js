@@ -18,7 +18,9 @@ export const state = {
   winner: null,
   lastNexusDamageTurn: {},
   // Track last turn when per-player nexus damage was applied (1 damage max per owner per turn)
-  lastNexusPlayerDamageTurn: { 1: 0, 2: 0 }
+  lastNexusPlayerDamageTurn: { 1: 0, 2: 0 },
+  // UI: which realm is currently being viewed
+  viewRealm: 'overworld'
 };
 
 export function uid() { 
@@ -43,6 +45,8 @@ export function resetState() {
   state.lastNexusDamageTurn = {};
   // Reset per-player nexus damage turn tracker
   state.lastNexusPlayerDamageTurn = { 1: 0, 2: 0 };
+  // Reset realm view
+  state.viewRealm = 'overworld';
 }
 
 export function getPublicState() {

@@ -4,10 +4,25 @@
 import { state, uid } from "./state.js";
 import { getCell, inBounds } from "./board.js";
 
+function getRealmUnit(cell, realm) {
+  if (!cell) return null;
+  return realm === 'shadow' ? (cell.shadowUnit || null) : (cell.unit || null);
+}
+function setRealmUnit(cell, realm, unit) {
+  if (!cell) return;
+  if (realm === 'shadow') cell.shadowUnit = unit; else cell.unit = unit;
+}
+function clearRealmUnit(cell, realm) {
+  if (!cell) return;
+  if (realm === 'shadow') cell.shadowUnit = null; else cell.unit = null;
+}
+
 export function spawnUnit(defId, x, y, player) {
   if (!inBounds(x, y)) return false;
   const cell = getCell(x, y);
-  if (!cell || cell.unit) return false;
+  if (!cell) return false;
+  // Overworld spawning only
+  if (cell.unit) return false;
   
   // Get unit definition from global UNIT_TYPES
   const def = window.UNIT_TYPES ? window.UNIT_TYPES[defId] : null;
@@ -37,14 +52,12 @@ export function spawnUnit(defId, x, y, player) {
     move: def.move || 1,
     owner: player,
     x, y,
+    realm: 'overworld',
     actionsLeft: 2 // ACTIONS_PER_TURN
   };
   
-  cell.unit = unit;
+  setRealmUnit(cell, 'overworld', unit);
   state.players[player].purchased.add(def.id || def.name || defId);
-
-  // Note: No energy-based loss check here. The loss condition is evaluated at start of turn
-  // when: player has reached max obtainable energy AND cannot spawn AND has no units alive.
 
   return true;
 }
@@ -57,15 +70,21 @@ export function moveUnit(unit, tx, ty) {
   
   const src = getCell(unit.x, unit.y);
   const dst = getCell(tx, ty);
-  if (!dst || dst.unit) return false;
-  if (dst.blockedForMovement) return false;
+  if (!dst) return false;
+
+  // Realm-aware occupancy and blocking
+  const realm = unit.realm || 'overworld';
+  const occupied = getRealmUnit(dst, realm);
+  if (occupied) return false;
+  // In shadow realm, ignore overworld-only blockers
+  if (realm === 'overworld' && dst.blockedForMovement) return false;
   
   const reachable = computeReachable(unit);
   if (!reachable.has(`${tx},${ty}`)) return false;
   
-  src.unit = null;
+  clearRealmUnit(src, realm);
   unit.x = tx; unit.y = ty;
-  dst.unit = unit;
+  setRealmUnit(dst, realm, unit);
   unit.actionsLeft = Math.max(0, (unit.actionsLeft || 0) - 1);
   
   return true;
@@ -80,9 +99,11 @@ export function attackUnit(attacker, tx, ty) {
   const targetCell = getCell(tx, ty);
   if (!targetCell) return false;
 
-  // attack unit
-  if (targetCell.unit) {
-    const target = targetCell.unit;
+  const realm = attacker.realm || 'overworld';
+  const target = getRealmUnit(targetCell, realm);
+
+  // attack unit in same realm only
+  if (target) {
     if (target.owner === attacker.owner) return false;
     if (!canAttack(attacker, tx, ty)) return false;
     
@@ -90,12 +111,12 @@ export function attackUnit(attacker, tx, ty) {
     target.hp -= dmg;
     attacker.actionsLeft = Math.max(0, (attacker.actionsLeft || 0) - 1);
     
-    if (target.hp <= 0) targetCell.unit = null;
+    if (target.hp <= 0) clearRealmUnit(targetCell, realm);
     return true;
   }
 
-  // attack heart
-  if (targetCell.heart && targetCell.heart.owner) {
+  // attack heart only in overworld
+  if (realm === 'overworld' && targetCell.heart && targetCell.heart.owner) {
     const heart = targetCell.heart;
     if (heart.owner === attacker.owner) return false;
     if (!canAttack(attacker, tx, ty)) return false;
@@ -127,7 +148,12 @@ function computeReachable(unit) {
       const nx = x + dx, ny = y + dy;
       if (!inBounds(nx, ny)) continue;
       const cell = getCell(nx, ny);
-      if (!cell || cell.unit || cell.blockedForMovement) continue;
+      if (!cell) continue;
+      const realm = unit.realm || 'overworld';
+      // can't move onto occupied slot for the same realm
+      if (getRealmUnit(cell, realm)) continue;
+      // In overworld, respect blockers; in shadow, ignore blockers from structures
+      if (realm === 'overworld' && cell.blockedForMovement) continue;
       const k = key(nx, ny);
       if (visited.has(k)) continue;
       visited.add(k);
@@ -154,11 +180,45 @@ export function useAbility(unit, abilityIndex, targetX = null, targetY = null) {
   if (!unit) return false;
   if (unit.owner !== state.currentPlayer) return false;
   if ((unit.actionsLeft || 0) <= 0) return false;
+
+  // Resolve unit definition and ability once
   const defs = window.UNIT_TYPES || {};
-  const def = defs[unit.defId] || {};
-  const abilities = def.abilities || [];
+  const uDef = defs[unit.defId] || {};
+  const abilities = uDef.abilities || [];
   const ability = abilities[abilityIndex];
   if (!ability) return false;
+
+  // Handle Shade's Vanish (realm toggle)
+  if (unit.defId === 'shadow' && ability.name === 'Vanish') {
+    // cooldown check
+    unit._cooldowns = unit._cooldowns || {};
+    const cd = unit._cooldowns['Vanish'] || 0;
+    if (cd > 0) return false;
+
+    const cell = getCell(unit.x, unit.y);
+    const fromRealm = unit.realm || 'overworld';
+    const toRealm = fromRealm === 'overworld' ? 'shadow' : 'overworld';
+
+    // target slot must be free in destination realm
+    if (getRealmUnit(cell, toRealm)) return false;
+
+    // Move between realms
+    clearRealmUnit(cell, fromRealm);
+    unit.realm = toRealm;
+    setRealmUnit(cell, toRealm, unit);
+
+    // Apply cooldown and consume action
+    unit._cooldowns['Vanish'] = ability.cooldown || 3;
+    unit.actionsLeft = Math.max(0, (unit.actionsLeft || 0) - 1);
+
+    // Dispatch a simple FX event for UI to animate
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('vanishFX', { detail: { x: unit.x, y: unit.y, realm: toRealm } }));
+    }
+
+    return true;
+  }
+
   const name = (ability.name || '').toLowerCase();
 
   // cooldown gate
@@ -179,7 +239,7 @@ export function useAbility(unit, abilityIndex, targetX = null, targetY = null) {
     if (!inBounds(nx, ny)) return false;
     const dst = getCell(nx, ny);
     if (!dst || dst.unit || dst.blockedForMovement) return false;
-    const ddef = def;
+    const ddef = uDef;
     if (dst.terrain === 'mountain' && !ddef.canClimbMountain) return false;
     if (dst.terrain === 'water' && !ddef.canCrossWater && !ddef.waterOnly && dst.terrain !== 'bridge') return false;
     const src = getCell(unit.x, unit.y);
@@ -204,7 +264,7 @@ export function useAbility(unit, abilityIndex, targetX = null, targetY = null) {
     const after = getCell(targetX, targetY);
     if (after && !after.unit && !after.blockedForMovement) {
       // terrain restrictions match unit def
-      const ddef = def;
+      const ddef = uDef;
       if (!(after.terrain === 'mountain' && !ddef.canClimbMountain) &&
           !((after.terrain === 'water') && !ddef.canCrossWater && !ddef.waterOnly && after.terrain !== 'bridge')) {
         const src = getCell(unit.x, unit.y);
@@ -229,7 +289,7 @@ export function useAbility(unit, abilityIndex, targetX = null, targetY = null) {
     }
     
     // Check range using archer's attack range (3 tiles)
-    const range = unit.range || def.range || 3;
+    const range = unit.range || uDef.range || 3;
     const dx = Math.abs(unit.x - targetX);
     const dy = Math.abs(unit.y - targetY);
     
@@ -240,7 +300,7 @@ export function useAbility(unit, abilityIndex, targetX = null, targetY = null) {
     }
     
     // Apply AoE damage to all enemies in 3x3 area around target
-    const dmg = unit.attack || def.atk || def.attack || 1;
+    const dmg = unit.attack || uDef.atk || uDef.attack || 1;
     let hitCount = 0;
     
     for (let yOffset = -1; yOffset <= 1; yOffset++) {
@@ -401,14 +461,6 @@ export function useAbility(unit, abilityIndex, targetX = null, targetY = null) {
       }
     }
     return false;
-  }
-
-  // Shadow: Vanish (become hidden until next turn; purely cosmetic for now)
-  if (unit.defId === 'shadow' && name.includes('vanish')) {
-    unit.hiddenUntilTurn = state.turn + 1;
-    unit.actionsLeft--;
-    applyCooldownAndFlash();
-    return true;
   }
 
   // default: no-op consume

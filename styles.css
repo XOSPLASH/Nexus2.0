@@ -318,3 +318,33 @@ html,body { height:100%; margin:0; background: linear-gradient(180deg,#07111a 0%
   box-shadow: 0 4px 12px rgba(160,100,255,0.2);
 }
 .unit-ability-desc .ability-cancel-btn { opacity: 0.9; }
+
+/* Shadow realm visual cues */
+#boardPanel.shadow-view {
+  filter: saturate(0.8) hue-rotate(210deg) brightness(0.9);
+}
+
+.cell.shadow-terrain {
+  background-image: linear-gradient(135deg, rgba(20,20,35,0.6), rgba(15,10,25,0.6));
+  box-shadow: inset 0 0 0 1px rgba(120, 80, 200, 0.25);
+}
+
+/* Realm toggle button */
+.realm-toggle {
+  position: absolute;
+  right: -120px; /* sits to the right of the grid area */
+  top: 0;
+  padding: 8px 12px;
+  background: #1e1b2b;
+  color: #d7c9ff;
+  border: 1px solid rgba(160, 100, 255, 0.4);
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+  transition: transform 0.1s ease, box-shadow 0.2s ease;
+}
+
+.realm-toggle:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(160, 100, 255, 0.25);
+}

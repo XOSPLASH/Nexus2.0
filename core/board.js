@@ -28,6 +28,7 @@ export function initBoard() {
         x, y, 
         terrain: 'plain', 
         unit: null, 
+        shadowUnit: null, // Support for shadow realm units
         nexus: null, 
         spawner: null, 
         heart: null, 

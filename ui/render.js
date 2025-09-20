@@ -21,6 +21,15 @@ export function renderBoard() {
   clearElement(gridEl);
   gridEl.style.gridTemplateColumns = `repeat(${BOARD_SIZE}, var(--cell-size, 40px))`;
 
+  // Realm toggle button (appears at right side of grid area)
+  ensureRealmToggle();
+
+  // Adjust board classes for realm visuals
+  const boardPanelEl = document.getElementById('boardPanel');
+  if (boardPanelEl) {
+    boardPanelEl.classList.toggle('shadow-view', state.viewRealm === 'shadow');
+  }
+
   // precompute movement/attack once for performance
   const selected = state.selectedUnit;
   const UNIT_TYPES = window.UNIT_TYPES || {};
@@ -34,7 +43,7 @@ export function renderBoard() {
   // ability targeting overlays
   const abilityTargeting = state.abilityTargeting;
   // NEW: prepare aim mode class + instructions banner
-  const boardPanel = document.getElementById('boardPanel');
+  // reuse boardPanelEl from above
   let abilityUnitRef = null;
   let abilityName = '';
   let abilityInstruction = '';
@@ -44,7 +53,8 @@ export function renderBoard() {
     for (let yy = 0; yy < state.board.length; yy++) {
       for (let xx = 0; xx < state.board[0].length; xx++) {
         const c2 = getCell(xx, yy);
-        if (c2 && c2.unit && c2.unit.id === abilityTargeting.unitId) { abilityUnitRef = c2.unit; break; }
+        const u2 = state.viewRealm === 'shadow' ? (c2 && c2.shadowUnit) : (c2 && c2.unit);
+        if (u2 && u2.id === abilityTargeting.unitId) { abilityUnitRef = u2; break; }
       }
       if (abilityUnitRef) break;
     }
@@ -61,25 +71,17 @@ export function renderBoard() {
       else if (t === 'adjacent_water') abilityInstruction = `Click an adjacent water tile to use ${abilityName}.`;
       else if (t === 'charge_move') abilityInstruction = `Choose an adjacent empty tile to move (1 step).`;
       else abilityInstruction = `Choose a valid target for ${abilityName}.`;
-      // Override with tailored hint if available
-      try {
-        if (state._aimHint && state._aimHint.text) abilityInstruction = state._aimHint.text;
-      } catch (e) { /* ignore */ }
-      // detect volley
+      try { if (state._aimHint && state._aimHint.text) abilityInstruction = state._aimHint.text; } catch (e) {}
       isVolleyAbility = !!(ab && ab.name && String(ab.name).toLowerCase().includes('volley'));
     }
     gridEl.classList.add('aim-mode');
   } else {
     gridEl.classList.remove('aim-mode');
-    // Clear any transient aim state
     if (state._aimHover) state._aimHover = null;
     if (state._aimHint) state._aimHint.text = '';
   }
 
-  // Banner handling: show during aim OR when a transient banner text is set
   const bannerNeeded = !!abilityTargeting || !!(state._bannerText && state._bannerText.length > 0);
-  
-  // Move instructional text to unit info panel instead of purple banner
   const unitAbilityDescEl = document.getElementById('unit-ability-desc');
   if (unitAbilityDescEl) {
     if (bannerNeeded) {
@@ -101,7 +103,7 @@ export function renderBoard() {
   }
   
   // Remove any existing purple banner
-  if (boardPanel) {
+  if (boardPanelEl) {
     let banner = document.getElementById('instructionBanner');
     if (banner && banner.parentNode) banner.parentNode.removeChild(banner);
   }
@@ -116,7 +118,12 @@ export function renderBoard() {
       cellEl.dataset.x = x;
       cellEl.dataset.y = y;
 
-      // Nexus (neutral or owned)
+      // terrain visual tweak in shadow view
+      if (state.viewRealm === 'shadow') {
+        cellEl.classList.add('shadow-terrain');
+      }
+
+      // Nexus (neutral or owned) — visible in both realms for orientation
       if (c.nexus) {
         const el = document.createElement('div'); 
         el.className = 'marker-full nexus';
@@ -127,8 +134,8 @@ export function renderBoard() {
         cellEl.appendChild(el);
       }
 
-      // Spawner
-      if (c.spawner) {
+      // Spawner — show in overworld view only to avoid confusion
+      if (state.viewRealm !== 'shadow' && c.spawner) {
         const el = document.createElement('div'); 
         el.className = 'marker-full spawner';
         el.textContent = '⚙';
@@ -137,14 +144,13 @@ export function renderBoard() {
         cellEl.appendChild(el);
       }
 
-      // Heart
-      if (c.heart) {
+      // Heart — overworld only
+      if (state.viewRealm !== 'shadow' && c.heart) {
         const el = document.createElement('div'); 
         el.className = 'marker-full heart';
         el.textContent = '♥';
         if (c.heart.owner === 1) el.classList.add('player');
         else if (c.heart.owner === 2) el.classList.add('enemy');
-        // small HP badge
         const hpBadge = document.createElement('div'); 
         hpBadge.className = 'heart-hp'; 
         hpBadge.textContent = String(state.players[c.heart.owner || 1].hp);
@@ -152,9 +158,9 @@ export function renderBoard() {
         cellEl.appendChild(el);
       }
 
-      // Unit
-      if (c.unit) {
-        const u = c.unit;
+      // Unit rendering depends on realm
+      const u = (state.viewRealm === 'shadow') ? c.shadowUnit : c.unit;
+      if (u) {
         const ue = document.createElement('div'); 
         ue.className = 'unit-el owner-' + (u.owner || 1);
         ue.textContent = u.symbol || (u.name ? u.name.charAt(0) : '?');
@@ -168,53 +174,53 @@ export function renderBoard() {
         ue.appendChild(ap);
         cellEl.appendChild(ue);
         
-        // Add selection highlighting
         if (state.selectedUnit && state.selectedUnit.id === u.id) {
           ue.classList.add('selected');
         }
         
-        // Add attackable highlighting (unit border)
+        // attackable highlighting: only within currently viewed realm
         if (state.selectedUnit && state.selectedUnit.owner !== u.owner && canAttackTarget(state.selectedUnit, u.x, u.y)) {
           ue.classList.add('attackable-target');
         }
 
-        // Ability activation flash
         if (u._abilityFlashTurn === state.turn) {
           ue.classList.add('attack-flash');
         }
       }
       
-      // Add movement highlights for selected unit
-      if (selected && !c.unit) {
+      // movement highlights for selected unit (only if same realm as view)
+      if (selected && selected.realm === state.viewRealm) {
         const key = `${x},${y}`;
-        if (baseReach.has(key)) {
+        const occupied = state.viewRealm === 'shadow' ? !!c.shadowUnit : !!c.unit;
+        if (!occupied && baseReach.has(key)) {
           const overlay = document.createElement('div');
           overlay.className = 'highlight-overlay highlight-move';
           cellEl.appendChild(overlay);
-        } else if ((bonusMove > 0) && totalReach.has(key)) {
-          // tiles newly reachable thanks to Dash or other temporary bonuses -> purple border
+        } else if ((bonusMove > 0) && !occupied && totalReach.has(key)) {
           const overlay = document.createElement('div');
           overlay.className = 'highlight-overlay highlight-ability';
           cellEl.appendChild(overlay);
         }
       }
 
-      // Add attack overlays ONLY on enemy-occupied, actually attackable cells
-      if (selected && c.unit && c.unit.owner !== selected.owner && canAttackTarget(selected, x, y)) {
-        const overlay = document.createElement('div');
-        overlay.className = 'highlight-overlay highlight-attack-ortho';
-        cellEl.appendChild(overlay);
+      // Attack overlays: only show when an enemy unit is present in this realm
+      if (selected && selected.realm === state.viewRealm) {
+        const occupiedEnemy = (state.viewRealm === 'shadow' ? (c.shadowUnit && c.shadowUnit.owner !== selected.owner) : (c.unit && c.unit.owner !== selected.owner));
+        if (occupiedEnemy && canAttackTarget(selected, x, y)) {
+          const overlay = document.createElement('div');
+          overlay.className = 'highlight-overlay highlight-attack-ortho';
+          cellEl.appendChild(overlay);
+        }
       }
 
-      // Ability targeting overlays per ability target type (purple border)
-      if (abilityTargeting && abilityUnitRef) {
+      // Ability targeting overlays — only if the ability unit is in the current view realm
+      if (abilityTargeting && abilityUnitRef && abilityUnitRef.realm === state.viewRealm) {
         const t = abilityTargeting.targetType;
         let show = false;
         let useOverlay = false;
         let overlayClass = 'highlight-overlay highlight-ability';
 
         if (t === 'enemy_in_range') {
-          // Archer Volley aiming: default highlight within range; when hovering, preview a 3x3 impact area around hover center
           const def = (UNIT_TYPES[abilityUnitRef.defId] || {});
           const range = abilityUnitRef.range || def.range || 1;
           const canDiag = def.canAttackDiagonal || abilityUnitRef.defId === 'archer' || abilityUnitRef.defId === 'naval';
@@ -229,19 +235,15 @@ export function renderBoard() {
             const centerCheb = Math.max(Math.abs(abilityUnitRef.x - cx), Math.abs(abilityUnitRef.y - cy));
             const centerInRange = canDiag ? (centerCheb <= range) : (centerMan <= range);
             if (centerInRange) {
-              // show 3x3 around hover center
               show = Math.abs(x - cx) <= 1 && Math.abs(y - cy) <= 1;
             } else {
-              // if hover center isn't valid, show nothing
               show = false;
             }
           } else {
-            // no hover: show general in-range aim area
             show = inRange;
           }
           useOverlay = show;
 
-          // Visible boundary ring for Volley: outer limit tiles
           if (isVolleyAbility) {
             const isBoundary = canDiag ? (chebyshev === range) : (manhattan === range);
             if (isBoundary) {
@@ -274,11 +276,9 @@ export function renderBoard() {
           cellEl.appendChild(overlay);
         }
 
-        // Add hover listeners for 3x3 preview when aiming with Volley
         if (t === 'enemy_in_range') {
           cellEl.addEventListener('mouseenter', () => {
             state._aimHover = { x, y };
-            // Throttle re-render to avoid canceling click due to DOM replacement during hover
             if (!state._suppressAimRerender) {
               if (typeof window.requestAnimationFrame === 'function') {
                 requestAnimationFrame(() => {
@@ -291,7 +291,6 @@ export function renderBoard() {
           });
           cellEl.addEventListener('mouseleave', () => {
             state._aimHover = null;
-            // Throttle re-render similarly on leave
             if (!state._suppressAimRerender) {
               if (typeof window.requestAnimationFrame === 'function') {
                 requestAnimationFrame(() => {
@@ -308,6 +307,44 @@ export function renderBoard() {
       gridEl.appendChild(cellEl);
     }
   }
+
+  // update toggle visibility & label
+  updateRealmToggle();
+}
+
+function ensureRealmToggle() {
+  let toggle = document.getElementById('realmToggle');
+  if (!toggle) {
+    toggle = document.createElement('button');
+    toggle.id = 'realmToggle';
+    toggle.className = 'realm-toggle';
+    toggle.title = 'Switch view between Overworld and Shadow Realm';
+    toggle.addEventListener('click', () => {
+      const st = getState();
+      if (!st) return;
+      st.viewRealm = (st.viewRealm === 'overworld') ? 'shadow' : 'overworld';
+      if (typeof window.updateUI === 'function') window.updateUI();
+    });
+    const boardPanel = document.getElementById('boardPanel');
+    if (boardPanel) boardPanel.appendChild(toggle);
+  }
+}
+
+function updateRealmToggle() {
+  const st = getState();
+  const toggle = document.getElementById('realmToggle');
+  if (!st || !toggle) return;
+
+  // Show toggle only if current player has at least one unit in shadow realm
+  let hasShadow = false;
+  for (let y = 0; y < st.board.length && !hasShadow; y++) {
+    for (let x = 0; x < st.board[0].length; x++) {
+      const c = getCell(x, y);
+      if (c && c.shadowUnit && c.shadowUnit.owner === st.currentPlayer) { hasShadow = true; break; }
+    }
+  }
+  toggle.style.display = hasShadow ? 'block' : 'none';
+  toggle.textContent = (st.viewRealm === 'shadow') ? 'View: Shadow' : 'View: Overworld';
 }
 
 function clearElement(el) { 
@@ -352,13 +389,17 @@ function computeReachable(unit, stepsOverride) {
       const cell = getCell(nx, ny);
       if (!cell) continue;
       
-      // can't move onto occupied or truly blocked markers (spawners/hearts). Nexuses are NOT blocking.
-      if (cell.unit || cell.heart || cell.spawner) continue;
-      if (cell.blockedForMovement) continue;
-      
-      // terrain restrictions (match UI rules)
-      if (cell.terrain === 'water' && !(def.canMoveOnWater || unit.defId === 'naval') && cell.terrain !== 'bridge') continue;
-      if (cell.terrain === 'mountain' && !def.canClimb) continue;
+      // respect occupancy by realm
+      const occupied = unit.realm === 'shadow' ? !!cell.shadowUnit : !!cell.unit;
+      if (occupied) continue;
+
+      // blockers only apply in overworld
+      if (unit.realm !== 'shadow') {
+        if (cell.heart || cell.spawner) continue;
+        if (cell.blockedForMovement) continue;
+        if (cell.terrain === 'water' && !(def.canMoveOnWater || unit.defId === 'naval') && cell.terrain !== 'bridge') continue;
+        if (cell.terrain === 'mountain' && !def.canClimb) continue;
+      }
       
       set.add(key);
       visited.add(key);

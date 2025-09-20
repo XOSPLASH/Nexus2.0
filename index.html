@@ -265,7 +265,8 @@
         for (let yy = 0; yy < state.board.length; yy++) {
           for (let xx = 0; xx < state.board[0].length; xx++) {
             const c = window.NexusCore.getCell(xx, yy);
-            if (c && c.unit && c.unit.id === at.unitId) { unitRef = c.unit; break; }
+            const u = (c && c.shadowUnit && c.shadowUnit.id === at.unitId) ? c.shadowUnit : (c && c.unit && c.unit.id === at.unitId ? c.unit : null);
+            if (u) { unitRef = u; break; }
           }
           if (unitRef) break;
         }
@@ -404,6 +405,34 @@
       // For now, just show an error
       document.body.innerHTML = '<div style="padding: 20px; color: white; background: #0f1724;">Error loading game modules. Please check console for details.</div>';
     }
+  </script>
+  <script>
+  // Attach a simple FX listener for Vanish transitions
+  window.addEventListener('vanishFX', (e) => {
+    const d = e.detail || {};
+    const gx = d.x, gy = d.y;
+    const grid = document.getElementById('grid');
+    if (!grid) return;
+    const cell = grid.querySelector(`.cell[data-x="${gx}"][data-y="${gy}"]`);
+    if (!cell) return;
+    const puff = document.createElement('div');
+    puff.className = 'fx-vanish-puff';
+    puff.style.position = 'absolute';
+    puff.style.inset = '4px';
+    puff.style.borderRadius = '10px';
+    puff.style.pointerEvents = 'none';
+    puff.style.background = 'radial-gradient(circle at 50% 50%, rgba(160,100,255,0.35), rgba(40,20,60,0.0) 70%)';
+    puff.style.boxShadow = '0 0 18px rgba(160,100,255,0.45), inset 0 0 10px rgba(200,160,255,0.15)';
+    puff.style.opacity = '0.95';
+    puff.style.transform = 'scale(0.6)';
+    puff.style.transition = 'opacity 450ms ease, transform 450ms ease';
+    cell.appendChild(puff);
+    requestAnimationFrame(() => {
+      puff.style.opacity = '0';
+      puff.style.transform = 'scale(1.4)';
+    });
+    setTimeout(() => { if (puff && puff.parentNode) puff.parentNode.removeChild(puff); }, 500);
+  });
   </script>
 </body>
 </html>
