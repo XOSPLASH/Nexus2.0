@@ -42,6 +42,10 @@ export function spawnUnit(defId, x, y, player) {
   
   cell.unit = unit;
   state.players[player].purchased.add(def.id || def.name || defId);
+
+  // Note: No energy-based loss check here. The loss condition is evaluated at start of turn
+  // when: player has reached max obtainable energy AND cannot spawn AND has no units alive.
+
   return true;
 }
 
@@ -92,16 +96,16 @@ export function attackUnit(attacker, tx, ty) {
 
   // attack heart
   if (targetCell.heart && targetCell.heart.owner) {
-    const owner = targetCell.heart.owner;
-    if (owner === attacker.owner) return false;
+    const heart = targetCell.heart;
+    if (heart.owner === attacker.owner) return false;
     if (!canAttack(attacker, tx, ty)) return false;
-    
+
     const dmg = attacker.attack || 1;
-    state.players[owner].hp = Math.max(0, state.players[owner].hp - dmg);
+    const opponent = heart.owner;
+    state.players[opponent].hp = Math.max(0, state.players[opponent].hp - dmg);
     attacker.actionsLeft = Math.max(0, (attacker.actionsLeft || 0) - 1);
-    
-    if (state.players[owner].hp <= 0) { 
-      state.winner = attacker.owner; 
+    if (state.players[opponent].hp <= 0) {
+      state.winner = attacker.owner;
     }
     return true;
   }
@@ -110,92 +114,42 @@ export function attackUnit(attacker, tx, ty) {
 }
 
 function computeReachable(unit) {
+  const key = (x,y)=>`${x},${y}`;
   const set = new Set();
-  if (!unit) return set;
-  
-  // Get unit definition safely
-  const def = window.UNIT_TYPES ? window.UNIT_TYPES[unit.defId] : {};
-  const baseMove = unit.move || def.move || 1;
-  const bonus = unit._tempMoveBonus || 0;
-  const maxSteps = baseMove + bonus;
   const visited = new Set();
   const q = [{ x: unit.x, y: unit.y, d: 0 }];
-  visited.add(`${unit.x},${unit.y}`);
-  set.add(`${unit.x},${unit.y}`);
-  
+  visited.add(key(unit.x, unit.y));
   while (q.length) {
-    const cur = q.shift();
-    if (cur.d >= maxSteps) continue;
-    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-    
-    for (const [dx, dy] of dirs) {
-      const nx = cur.x + dx, ny = cur.y + dy;
+    const { x, y, d } = q.shift();
+    if (d >= (unit.move || 1)) continue;
+    const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+    for (const [dx,dy] of dirs) {
+      const nx = x + dx, ny = y + dy;
       if (!inBounds(nx, ny)) continue;
-      const key = `${nx},${ny}`;
-      if (visited.has(key)) continue;
       const cell = getCell(nx, ny);
-      if (!cell) continue;
-      
-      // can't move onto occupied
-      if (cell.unit) continue;
-      // cannot step onto blocked markers (spawner/heart)
-      if (cell.blockedForMovement) continue;
-      // terrain restrictions
-      if (cell.terrain === 'mountain' && !(def.canClimbMountain)) continue;
-      if (cell.terrain === 'water' && !(def.canCrossWater) && !def.waterOnly && cell.terrain !== 'bridge') continue;
-      
-      visited.add(key);
-      set.add(key);
-      q.push({ x: nx, y: ny, d: cur.d + 1 });
+      if (!cell || cell.unit || cell.blockedForMovement) continue;
+      const k = key(nx, ny);
+      if (visited.has(k)) continue;
+      visited.add(k);
+      set.add(k);
+      q.push({ x: nx, y: ny, d: d + 1 });
     }
   }
   return set;
 }
 
 function canAttack(unit, tx, ty) {
-  if (!unit) return false;
-  const def = window.UNIT_TYPES ? window.UNIT_TYPES[unit.defId] : {};
-  const range = unit.range || def.range || 1;
-  
-  // Calculate both orthogonal and diagonal distances
-  const orthogonalDist = Math.abs(unit.x - tx) + Math.abs(unit.y - ty);
-  const diagonalDist = Math.max(Math.abs(unit.x - tx), Math.abs(unit.y - ty));
-  
-  // Some units can attack diagonally (archers, naval units, certain abilities)
-  const canAttackDiagonal = def.canAttackDiagonal || unit.defId === 'archer' || unit.defId === 'naval';
-  
-  if (canAttackDiagonal) {
-    return diagonalDist <= range;
-  } else {
-    return orthogonalDist <= range;
-  }
+  const dx = Math.abs(unit.x - tx);
+  const dy = Math.abs(unit.y - ty);
+  const r = unit.range || 1;
+  return (dx + dy) <= r;
 }
 
-// Simplified spawn checking (will be enhanced by spawn module)
 function checkSpawnableForPlayer(def, x, y, player) {
-  const cell = getCell(x, y);
-  if (!cell || cell.unit) return false;
-  if (cell.nexus || cell.spawner || cell.heart) return false;
-  if (cell.blockedForMovement) return false;
-  
-  // terrain rules
-  if (def && def.waterOnly) {
-    if (cell.terrain !== 'water' && cell.terrain !== 'bridge') return false;
-  } else {
-    if (cell.terrain === 'water' && !(def && def.canCrossWater) && !(def && def.waterOnly)) return false;
-    if (cell.terrain === 'mountain' && !(def && def.canClimbMountain)) return false;
-  }
-  
-  // must be adjacent to player's spawner
-  const spawner = state.players[player].spawner;
-  if (!spawner) return false;
-  
-  if (Math.abs(spawner.x - x) <= 1 && Math.abs(spawner.y - y) <= 1) return true;
-  
-  return false;
+  if (!window.NexusMechanics || typeof window.NexusMechanics.isSpawnableForPlayer !== 'function') return false;
+  return window.NexusMechanics.isSpawnableForPlayer(def, x, y, player);
 }
 
-// Centralized ability execution
 export function useAbility(unit, abilityIndex, targetX = null, targetY = null) {
   if (!unit) return false;
   if (unit.owner !== state.currentPlayer) return false;
@@ -235,45 +189,36 @@ export function useAbility(unit, abilityIndex, targetX = null, targetY = null) {
     return true;
   };
 
-  // Soldier: Charge two-phase
-  // Phase 2 handler: after a successful attack, allow choosing an adjacent empty tile to move (does NOT consume extra action)
-  if (unit.defId === 'soldier' && name.includes('charge') && state.abilityTargeting && state.abilityTargeting.phase === 'charge_move' && state.abilityTargeting.unitId === unit.id) {
-    if (targetX == null || targetY == null) return false;
-    // must move exactly 1 orthogonal step into a valid empty tile
-    if (Math.abs(unit.x - targetX) + Math.abs(unit.y - targetY) !== 1) return false;
-    const moved = tryManualStep(targetX, targetY);
-    if (moved) {
-      // complete the move phase; cooldown already applied during attack phase
-      state.abilityTargeting = null;
-      return true;
-    }
-    return false;
-  }
-
-  // Soldier: Charge (Phase 1 - attack selected enemy in range, then enter move phase)
+  // Soldier: Charge (simple lunge) — attack an enemy in range; if it dies, move into its tile (no second phase)
   if (unit.defId === 'soldier' && name.includes('charge')) {
-    // If explicit target provided, attempt attack
-    if (targetX != null && targetY != null) {
-      const ok = attackUnit(unit, targetX, targetY);
-      if (ok) {
-        applyCooldownAndFlash();
-        // enter move phase without consuming another action
-        try {
-          state.abilityTargeting = { unitId: unit.id, abilityIndex, targetType: 'charge_move', phase: 'charge_move' };
-        } catch (e) {}
+    if (targetX == null || targetY == null) return false;
+    // must target an enemy unit within attack range
+    const targetCell = getCell(targetX, targetY);
+    if (!targetCell || !targetCell.unit || targetCell.unit.owner === unit.owner) return false;
+    if (!canAttack(unit, targetX, targetY)) return false;
+
+    const ok = attackUnit(unit, targetX, targetY);
+    if (!ok) return false;
+
+    // If the target died, move into that tile if passable
+    const after = getCell(targetX, targetY);
+    if (after && !after.unit && !after.blockedForMovement) {
+      // terrain restrictions match unit def
+      const ddef = def;
+      if (!(after.terrain === 'mountain' && !ddef.canClimbMountain) &&
+          !((after.terrain === 'water') && !ddef.canCrossWater && !ddef.waterOnly && after.terrain !== 'bridge')) {
+        const src = getCell(unit.x, unit.y);
+        // ensure unit is still at src (wasn't moved by other effects)
+        if (src && src.unit && src.unit.id === unit.id) {
+          src.unit = null;
+          unit.x = targetX; unit.y = targetY;
+          after.unit = unit;
+        }
       }
-      return ok;
     }
-    // Fallback (e.g., AI): attack nearest enemy if already in range
-    if (nearestEnemy && canAttack(unit, nearestEnemy.x, nearestEnemy.y)) {
-      const ok = attackUnit(unit, nearestEnemy.x, nearestEnemy.y);
-      if (ok) {
-        applyCooldownAndFlash();
-        try { state.abilityTargeting = { unitId: unit.id, abilityIndex, targetType: 'charge_move', phase: 'charge_move' }; } catch (e) {}
-      }
-      return ok;
-    }
-    return false;
+
+    applyCooldownAndFlash();
+    return true;
   }
 
   // Archer: Volley (3x3 AoE centered on target cell within range)
