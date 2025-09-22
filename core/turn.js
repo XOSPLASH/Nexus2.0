@@ -67,6 +67,18 @@ export function endTurn() {
     }
   }
 
+  // After auto-exit, if current view is shadow but the current player has no shadow units, switch back to overworld to avoid trapping the UI
+  if (state.viewRealm === 'shadow') {
+    let hasShadowForCurrent = false;
+    for (let y = 0; y < state.board.length && !hasShadowForCurrent; y++) {
+      for (let x = 0; x < state.board[0].length; x++) {
+        const c = getCell(x, y);
+        if (c && c.shadowUnit && c.shadowUnit.owner === state.currentPlayer) { hasShadowForCurrent = true; break; }
+      }
+    }
+    if (!hasShadowForCurrent) state.viewRealm = 'overworld';
+  }
+
   // reset actions for new player's units (both realms) and decrement cooldowns ONLY for the player whose turn just started
   for (let y = 0; y < state.board.length; y++) {
     for (let x = 0; x < state.board[0].length; x++) {

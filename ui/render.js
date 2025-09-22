@@ -2,6 +2,7 @@
 // Board and unit rendering
 
 const BOARD_SIZE = 11;
+let GRID_WIDTH = BOARD_SIZE; // dynamic width synced on render
 
 function getState() {
   return window.NexusCore ? window.NexusCore.state : null;
@@ -17,6 +18,7 @@ export function renderBoard() {
   const grid = document.getElementById('grid');
   if (!grid) return;
   grid.innerHTML = '';
+  GRID_WIDTH = (st.board && st.board[0]) ? st.board[0].length : BOARD_SIZE;
 
   for (let y = 0; y < st.board.length; y++) {
     for (let x = 0; x < st.board[0].length; x++) {
@@ -90,10 +92,88 @@ export function renderBoard() {
         hp.className = 'unit-hp';
         hp.textContent = String(unit.hp != null ? unit.hp : 1);
         uEl.appendChild(hp);
+        // mark selected unit for subtle lift
+        if (st.selectedUnit && unit.id === st.selectedUnit.id) {
+          uEl.classList.add('selected');
+        }
         cellEl.appendChild(uEl);
       }
   
+      // Hover previews: movement path and attack target borders
+      cellEl.addEventListener('mouseenter', () => {
+        const s = getState();
+        if (!s) return;
+        const cx = x, cy = y;
+        clearMoveAttackOverlays();
+        // Ability targeting overlays are handled elsewhere; here we only show basic move/attack previews
+        const viewRealm = s.viewRealm || 'overworld';
+        const cell = getCell(cx, cy);
+        const selected = s.selectedUnit || null;
+        if (!selected) return;
+        // Ensure selected is visible in current view
+        if ((selected.realm || 'overworld') !== viewRealm) return;
+        const UNIT_TYPES = window.UNIT_TYPES || {};
+        const def = UNIT_TYPES[selected.defId] || {};
+
+        // Movement path preview: only when hovering a reachable empty tile
+        if (selected.actionsLeft > 0) {
+          const path = computePath(selected, cx, cy, def);
+          if (path && path.length > 1) {
+            drawMovePath(path);
+          }
+        }
+
+        // Attack preview: only when hovering an enemy unit/heart targetable by this unit
+        if (selected.actionsLeft > 0 && canAttackTarget(selected, cx, cy)) {
+          // enemy unit in same realm
+          const targetUnit = (viewRealm === 'shadow') ? (cell && cell.shadowUnit) : (cell && cell.unit);
+          const isEnemyUnit = targetUnit && targetUnit.owner !== selected.owner;
+          const isEnemyHeart = (viewRealm === 'overworld') && cell && cell.heart && cell.heart.owner && cell.heart.owner !== selected.owner;
+          if (isEnemyUnit || isEnemyHeart) {
+            const dx = Math.abs(selected.x - cx);
+            const dy = Math.abs(selected.y - cy);
+            const canDiag = !!(def.canAttackDiagonal || selected.defId === 'archer' || selected.defId === 'naval');
+            const cls = (dx === 0 || dy === 0) ? 'highlight-attack-ortho' : (canDiag ? 'highlight-attack-diag' : 'highlight-attack');
+            addAttackOverlayAt(cx, cy, cls);
+          }
+        }
+      });
+
+      cellEl.addEventListener('mouseleave', () => {
+        clearMoveAttackOverlays();
+      });
+  
       grid.appendChild(cellEl);
+    }
+  }
+
+  // clear previews when leaving the grid entirely
+  grid.addEventListener('mouseleave', () => {
+    clearMoveAttackOverlays();
+  });
+
+  // Persistent overlays for selected unit: movement tiles tinted by owner color, and attackable enemy targets
+  const selected = st.selectedUnit;
+  if (selected && !st.abilityTargeting) {
+    const viewRealm = st.viewRealm || 'overworld';
+    if ((selected.realm || 'overworld') === viewRealm) {
+      const ownerCls = 'owner-' + (selected.owner || 1);
+      // Movement tiles
+      const reachable = computeReachable(selected);
+      for (const key of reachable) {
+        const [mx, my] = key.split(',').map(Number);
+        if (mx === selected.x && my === selected.y) continue;
+        addOverlayAt(mx, my, `highlight-move ${ownerCls}`);
+      }
+      // Attackable enemy tiles
+      const attackMap = computeAttackOverlay(selected);
+      for (const [k, type] of attackMap) {
+        const [ax, ay] = k.split(',').map(Number);
+        if (!canAttackTarget(selected, ax, ay)) continue;
+        const cls = type === 'diag' ? 'highlight-attack-diag' : 'highlight-attack-ortho';
+        // Persistent selection attack overlays should NOT be tagged as preview
+        addOverlayAt(ax, ay, cls);
+      }
     }
   }
 
@@ -148,6 +228,118 @@ function clearElement(el) {
   while (el.firstChild) el.removeChild(el.firstChild); 
 }
 
+// Movement/Attack preview helpers
+function gridEl() {
+  return document.getElementById('grid');
+}
+
+function clearMoveAttackOverlays() {
+  const grid = gridEl();
+  if (!grid) return;
+  // Only clear hover-preview overlays; persistent selection overlays remain
+  grid.querySelectorAll('.highlight-overlay.preview').forEach(n => n.remove());
+}
+
+function addOverlayAt(x, y, cls) {
+  const grid = gridEl(); if (!grid) return;
+  const idx = y * GRID_WIDTH + x;
+  const cellEl = grid.children[idx];
+  if (!cellEl) return;
+  // avoid duplicating same overlay
+  if (cellEl.querySelector(`.highlight-overlay.${cls.split(' ').join('.')}`)) return;
+  const ov = document.createElement('div');
+  ov.className = `highlight-overlay ${cls}`;
+  cellEl.appendChild(ov);
+}
+
+function addAttackOverlayAt(x, y, cls) {
+  const c = cls || 'highlight-attack';
+  // tag hover overlays for cleanup without affecting selection overlays
+  addOverlayAt(x, y, `${c} preview`);
+}
+
+function drawMovePath(path) {
+  // path is array of {x,y} including start and end; draw borders on each tile except the origin
+  const s = getState();
+  const ownerCls = (s && s.selectedUnit) ? ('owner-' + s.selectedUnit.owner) : '';
+  for (let i = 1; i < path.length; i++) {
+    const step = path[i];
+    const cls = ownerCls ? `highlight-move preview ${ownerCls}` : 'highlight-move preview';
+    addOverlayAt(step.x, step.y, cls);
+  }
+}
+
+function inBounds(x, y) {
+  return window.NexusCore && typeof window.NexusCore.inBounds === 'function' ? window.NexusCore.inBounds(x, y) : (x >= 0 && y >= 0 && x < GRID_WIDTH && y < GRID_WIDTH);
+}
+
+function canEnter(unit, nx, ny, def) {
+  const c = getCell(nx, ny);
+  if (!c) return false;
+  const realm = unit.realm || 'overworld';
+  // occupancy by realm
+  const occupied = (realm === 'shadow') ? !!c.shadowUnit : !!c.unit;
+  if (occupied) return false;
+  // blockers only in overworld
+  if (realm !== 'shadow') {
+    if (c.heart || c.spawner) return false;
+    if (c.blockedForMovement) return false;
+    if (c.terrain === 'water' && !(def.canMoveOnWater || unit.defId === 'naval') && c.terrain !== 'bridge') return false;
+    if (c.terrain === 'mountain' && !def.canClimb) return false;
+  }
+  return true;
+}
+
+function computePath(unit, tx, ty, def) {
+  if (!unit) return null;
+  const startKey = `${unit.x},${unit.y}`;
+  const targetKey = `${tx},${ty}`;
+  const visited = new Set([startKey]);
+  const parent = new Map();
+  const q = [{ x: unit.x, y: unit.y, d: 0 }];
+  const maxSteps = (() => {
+    const UNIT_TYPES = window.UNIT_TYPES || {};
+    const d = def || (UNIT_TYPES[unit.defId] || {});
+    return (unit.move || d.move || 1) + (unit._tempMoveBonus || 0);
+  })();
+  while (q.length) {
+    const cur = q.shift();
+    if (cur.d > maxSteps) continue;
+    if (cur.x === tx && cur.y === ty) {
+      // reconstruct
+      const path = [];
+      let k = targetKey;
+      let node = { x: tx, y: ty };
+      path.push(node);
+      while (parent.has(k)) {
+        const p = parent.get(k);
+        node = { x: p.x, y: p.y };
+        path.push(node);
+        k = `${p.x},${p.y}`;
+      }
+      // include start
+      path.push({ x: unit.x, y: unit.y });
+      path.reverse();
+      // validate within steps
+      if (path.length - 1 <= maxSteps) return path;
+      return null;
+    }
+    if (cur.d >= maxSteps) continue;
+    const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+    for (const [dx, dy] of dirs) {
+      const nx = cur.x + dx, ny = cur.y + dy;
+      if (!inBounds(nx, ny)) continue;
+      const key = `${nx},${ny}`;
+      if (visited.has(key)) continue;
+      if (!canEnter(unit, nx, ny, def)) continue;
+      visited.add(key);
+      parent.set(key, { x: cur.x, y: cur.y });
+      q.push({ x: nx, y: ny, d: cur.d + 1 });
+    }
+  }
+  return null;
+}
+
 function canAttackTarget(unit, tx, ty) {
   if (!unit) return false;
   const UNIT_TYPES = window.UNIT_TYPES || {};
@@ -157,7 +349,19 @@ function canAttackTarget(unit, tx, ty) {
   const diagonalDist = Math.max(Math.abs(unit.x - tx), Math.abs(unit.y - ty));
   const canAttackDiagonal = def.canAttackDiagonal || unit.defId === 'archer' || unit.defId === 'naval';
   const inRange = canAttackDiagonal ? (diagonalDist <= range) : (orthogonalDist <= range);
-  return inRange && unit.actionsLeft > 0;
+  if (!inRange || unit.actionsLeft <= 0) return false;
+  // Must be valid target: enemy unit in same realm, or enemy heart in overworld
+  const c = getCell(tx, ty);
+  const realm = unit.realm || 'overworld';
+  if (realm === 'shadow') {
+    const target = c && c.shadowUnit;
+    return !!(target && target.owner !== unit.owner);
+  } else {
+    const target = c && c.unit;
+    if (target && target.owner !== unit.owner) return true;
+    if (c && c.heart && c.heart.owner && c.heart.owner !== unit.owner) return true;
+    return false;
+  }
 }
 
 function computeReachable(unit, stepsOverride) {
@@ -212,15 +416,15 @@ function computeAttackOverlay(unit) {
   const def = UNIT_TYPES[unit.defId] || {};
   const range = unit.range || def.range || 1;
   const canAttackDiagonal = def.canAttackDiagonal || unit.defId === 'archer' || unit.defId === 'naval';
-  for (let y = 0; y < BOARD_SIZE; y++) {
-    for (let x = 0; x < BOARD_SIZE; x++) {
+  for (let y = 0; y < GRID_WIDTH; y++) {
+    for (let x = 0; x < GRID_WIDTH; x++) {
       const isSelf = (x === unit.x && y === unit.y);
       if (isSelf) continue;
       const manhattan = Math.abs(unit.x - x) + Math.abs(unit.y - y);
       const chebyshev = Math.max(Math.abs(unit.x - x), Math.abs(unit.y - y));
       if (canAttackDiagonal) {
         if (chebyshev <= range) {
-          const type = (manhattan % 2 === 0) ? 'diag' : 'ortho';
+          const type = (Math.abs(unit.x - x) === 0 || Math.abs(unit.y - y) === 0) ? 'ortho' : 'diag';
           map.set(`${x},${y}`, type);
         }
       } else {

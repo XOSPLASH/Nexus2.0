@@ -740,48 +740,13 @@
     gridEl.querySelectorAll('.marker-full.heart.attackable-target').forEach(n => n.classList.remove('attackable-target'));
 
     if (state.selectedUnit) {
-      const reachable = computeReachable(state.selectedUnit);
-      for (let y = 0; y < BOARD_SIZE; y++) {
-        for (let x = 0; x < BOARD_SIZE; x++) {
-          const key = `${x},${y}`;
-          if (reachable.has(key)) {
-            const idx = y * BOARD_SIZE + x;
-            const cellEl = gridEl.children[idx];
-            if (cellEl) {
-              const overlay = document.createElement('div');
-              overlay.className = 'highlight-overlay highlight-move';
-              cellEl.appendChild(overlay);
-            }
-          }
-        }
-      }
-      // mark selected unit
+      // mark selected unit only; movement/attack previews are now hover-driven in ui/render.js
       const su = state.selectedUnit;
       const idx = su.y * BOARD_SIZE + su.x;
       const selCellEl = gridEl.children[idx];
       if (selCellEl) {
         const ue = selCellEl.querySelector('.unit-el');
         if (ue) ue.classList.add('selected');
-      }
-    }
-
-    // mark attackable enemies/hearts
-    if (state.selectedUnit) {
-      const s = state.selectedUnit;
-      for (let y = 0; y < BOARD_SIZE; y++) {
-        for (let x = 0; x < BOARD_SIZE; x++) {
-          const c = getCell(x, y);
-          if (c.unit && c.unit.owner !== s.owner && canAttack(s, x, y)) {
-            const idx = y * BOARD_SIZE + x;
-            const ue = gridEl.children[idx].querySelector('.unit-el');
-            if (ue) ue.classList.add('attackable-target');
-          }
-          if (c.heart && c.heart.owner && c.heart.owner !== s.owner && canAttack(s, x, y)) {
-            const idx = y * BOARD_SIZE + x;
-            const he = gridEl.children[idx].querySelector('.marker-full.heart');
-            if (he) he.classList.add('attackable-target');
-          }
-        }
       }
     }
 
