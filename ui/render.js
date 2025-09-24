@@ -105,16 +105,22 @@ export function renderBoard() {
         if (!s) return;
         const cx = x, cy = y;
         clearMoveAttackOverlays();
-        // Ability targeting overlays are handled elsewhere; here we only show basic move/attack previews
         const viewRealm = s.viewRealm || 'overworld';
         const cell = getCell(cx, cy);
         const selected = s.selectedUnit || null;
         if (!selected) return;
         // Ensure selected is visible in current view
         if ((selected.realm || 'overworld') !== viewRealm) return;
+      
+        // Ability targeting hover overlays (purple) — take precedence over move/attack previews
+        if (s.abilityTargeting && s.abilityTargeting.unitId === selected.id) {
+          drawAbilityHoverPreview(selected, cx, cy);
+          return;
+        }
+      
         const UNIT_TYPES = window.UNIT_TYPES || {};
         const def = UNIT_TYPES[selected.defId] || {};
-
+      
         // Movement path preview: only when hovering a reachable empty tile
         if (selected.actionsLeft > 0) {
           const path = computePath(selected, cx, cy, def);
@@ -122,10 +128,9 @@ export function renderBoard() {
             drawMovePath(path);
           }
         }
-
+      
         // Attack preview: only when hovering an enemy unit/heart targetable by this unit
         if (selected.actionsLeft > 0 && canAttackTarget(selected, cx, cy)) {
-          // enemy unit in same realm
           const targetUnit = (viewRealm === 'shadow') ? (cell && cell.shadowUnit) : (cell && cell.unit);
           const isEnemyUnit = targetUnit && targetUnit.owner !== selected.owner;
           const isEnemyHeart = (viewRealm === 'overworld') && cell && cell.heart && cell.heart.owner && cell.heart.owner !== selected.owner;
@@ -254,7 +259,6 @@ function addOverlayAt(x, y, cls) {
 
 function addAttackOverlayAt(x, y, cls) {
   const c = cls || 'highlight-attack';
-  // tag hover overlays for cleanup without affecting selection overlays
   addOverlayAt(x, y, `${c} preview`);
 }
 
@@ -277,16 +281,13 @@ function canEnter(unit, nx, ny, def) {
   const c = getCell(nx, ny);
   if (!c) return false;
   const realm = unit.realm || 'overworld';
-  // occupancy by realm
   const occupied = (realm === 'shadow') ? !!c.shadowUnit : !!c.unit;
   if (occupied) return false;
-  // blockers only in overworld
-  if (realm !== 'shadow') {
-    if (c.heart || c.spawner) return false;
-    if (c.blockedForMovement) return false;
-    if (c.terrain === 'water' && !(def.canMoveOnWater || unit.defId === 'naval') && c.terrain !== 'bridge') return false;
-    if (c.terrain === 'mountain' && !def.canClimb) return false;
-  }
+  // Blockers for both realms to prevent overlap with overworld objects
+  const overworldBlocked = !!(c.heart || c.spawner || c.blockedForMovement);
+  const waterBlocked = (c.terrain === 'water' && !(def.canMoveOnWater || unit.defId === 'naval') && c.terrain !== 'bridge');
+  const mountainBlocked = (c.terrain === 'mountain' && !def.canClimb);
+  if (overworldBlocked || waterBlocked || mountainBlocked) return false;
   return true;
 }
 
@@ -367,7 +368,6 @@ function canAttackTarget(unit, tx, ty) {
 function computeReachable(unit, stepsOverride) {
   const set = new Set();
   if (!unit) return set;
-  
   const UNIT_TYPES = window.UNIT_TYPES || {};
   const def = UNIT_TYPES[unit.defId] || {};
   const maxSteps = (typeof stepsOverride === 'number') ? stepsOverride : (unit.move || def.move || 1) + (unit._tempMoveBonus || 0);
@@ -375,12 +375,10 @@ function computeReachable(unit, stepsOverride) {
   const q = [{ x: unit.x, y: unit.y, d: 0 }];
   visited.add(`${unit.x},${unit.y}`);
   set.add(`${unit.x},${unit.y}`);
-  
   while (q.length) {
     const cur = q.shift();
     if (cur.d >= maxSteps) continue;
     const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-    
     for (const [dx, dy] of dirs) {
       const nx = cur.x + dx, ny = cur.y + dy;
       if (!window.NexusCore.inBounds(nx, ny)) continue;
@@ -388,19 +386,12 @@ function computeReachable(unit, stepsOverride) {
       if (visited.has(key)) continue;
       const cell = getCell(nx, ny);
       if (!cell) continue;
-      
-      // respect occupancy by realm
       const occupied = unit.realm === 'shadow' ? !!cell.shadowUnit : !!cell.unit;
       if (occupied) continue;
-
-      // blockers only apply in overworld
-      if (unit.realm !== 'shadow') {
-        if (cell.heart || cell.spawner) continue;
-        if (cell.blockedForMovement) continue;
-        if (cell.terrain === 'water' && !(def.canMoveOnWater || unit.defId === 'naval') && cell.terrain !== 'bridge') continue;
-        if (cell.terrain === 'mountain' && !def.canClimb) continue;
-      }
-      
+      const overworldBlocked = !!(cell.heart || cell.spawner || cell.blockedForMovement);
+      const waterBlocked = (cell.terrain === 'water' && !(def.canMoveOnWater || unit.defId === 'naval') && cell.terrain !== 'bridge');
+      const mountainBlocked = (cell.terrain === 'mountain' && !def.canClimb);
+      if (overworldBlocked || waterBlocked || mountainBlocked) continue;
       set.add(key);
       visited.add(key);
       q.push({ x: nx, y: ny, d: cur.d + 1 });
@@ -435,4 +426,50 @@ function computeAttackOverlay(unit) {
     }
   }
   return map;
+}
+
+function drawAbilityHoverPreview(unit, tx, ty) {
+  const st = getState();
+  if (!st || !st.abilityTargeting) return;
+  const at = st.abilityTargeting;
+  // Archer Volley: show 3x3 purple boundary if target within attack range
+  const UNIT_TYPES = window.UNIT_TYPES || {};
+  const def = UNIT_TYPES[unit.defId] || {};
+  const range = unit.range || def.range || 1;
+  const dx = Math.abs(unit.x - tx);
+  const dy = Math.abs(unit.y - ty);
+  const canDiag = !!(def.canAttackDiagonal || unit.defId === 'archer' || unit.defId === 'naval');
+  const dist = canDiag ? Math.max(dx, dy) : (dx + dy);
+  const inRange = dist <= range;
+
+  // Clear any previous ability preview overlays (tagged as preview)
+  const grid = gridEl();
+  if (grid) grid.querySelectorAll('.highlight-overlay.preview').forEach(n => n.remove());
+
+  // Volley (archer): target type enemy_in_range — preview 3x3 area
+  const name = (def.abilities && def.abilities[at.abilityIndex] && def.abilities[at.abilityIndex].name || '').toLowerCase();
+  if (unit.defId === 'archer' && name.includes('volley') && inRange) {
+    for (let oy = -1; oy <= 1; oy++) {
+      for (let ox = -1; ox <= 1; ox++) {
+        const x = tx + ox, y = ty + oy;
+        if (!inBounds(x, y)) continue;
+        addOverlayAt(x, y, 'highlight-ability highlight-volley-boundary preview');
+      }
+    }
+    return;
+  }
+
+  // Builder Build Bridge: single tile adjacent water preview
+  if (unit.defId === 'builder' && name.includes('build')) {
+    if (Math.abs(tx - unit.x) <= 1 && Math.abs(ty - unit.y) <= 1) {
+      const c = getCell(tx, ty);
+      if (c && c.terrain === 'water') {
+        addOverlayAt(tx, ty, 'highlight-ability preview');
+        return;
+      }
+    }
+  }
+
+  // Generic ability preview: mark the hovered tile if targeting mode is active
+  addOverlayAt(tx, ty, 'highlight-ability preview');
 }
