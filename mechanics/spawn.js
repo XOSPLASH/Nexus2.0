@@ -135,11 +135,13 @@ export function isSpawnableForPlayer(def, x, y, player) {
     if (cell.terrain === 'mountain' && !(def && def.canClimbMountain)) return false;
   }
   
-  // must be adjacent to player's spawner
+  // must be near player's spawner (radius 1 for normal units, radius 2 for water-only)
   const spawner = state.players[player].spawner;
   if (!spawner) return false;
-  
-  if (Math.abs(spawner.x - x) <= 1 && Math.abs(spawner.y - y) <= 1) return true;
+  const dx = Math.abs(spawner.x - x);
+  const dy = Math.abs(spawner.y - y);
+  const maxDist = (def && def.waterOnly) ? 2 : 1;
+  if (dx <= maxDist && dy <= maxDist) return true;
   
   return false;
 }

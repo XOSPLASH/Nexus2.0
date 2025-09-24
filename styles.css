@@ -262,6 +262,7 @@ html,body { height:100%; margin:0; background: linear-gradient(180deg,#07111a 0%
 .highlight-ability { background: transparent; border: 2px solid rgba(180,100,255,0.98); box-shadow: 0 0 10px rgba(160,90,255,0.45), inset 0 0 8px rgba(160,90,255,0.25); }
 /* Spawning uses solid border style for consistency */
 .spawn-highlight { background: transparent; border: 2px solid rgba(220,200,60,0.98); box-shadow: 0 0 10px rgba(220,200,60,0.35), inset 0 0 8px rgba(220,200,60,0.2); }
+.spawn-highlight.radius2 { border-style: dashed; opacity: 0.95; box-shadow: 0 0 10px rgba(220,200,60,0.2), inset 0 0 8px rgba(220,200,60,0.15); }
 
 /* Volley boundary ring uses solid border */
 .highlight-overlay.highlight-volley-boundary {
@@ -365,3 +366,18 @@ html,body { height:100%; margin:0; background: linear-gradient(180deg,#07111a 0%
   transform: translateY(-1px);
   box-shadow: 0 4px 14px rgba(160, 100, 255, 0.25);
 }
+.spawn-adjacent { 
+  background: transparent; 
+  outline: 3px solid rgba(220,200,60,0.85); 
+  border-radius: 6px; 
+  mix-blend-mode: screen; 
+  box-shadow: 0 0 12px rgba(220,200,60,0.35), inset 0 0 10px rgba(220,200,60,0.18);
+}
+/* Slight pulse to differentiate from active spawn highlight while keeping consistency */
+@keyframes spawnAdjPulse {
+  0% { outline-color: rgba(220,200,60,0.70); }
+  50% { outline-color: rgba(255,235,120,0.95); }
+  100% { outline-color: rgba(220,200,60,0.70); }
+}
+.spawn-adjacent { animation: spawnAdjPulse 1.8s ease-in-out infinite; }
+/* ... existing code ... */

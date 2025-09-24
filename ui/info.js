@@ -157,6 +157,32 @@ export function showUnitDetailsForInstance(unit) {
       st.abilityTargeting = null;
       st._bannerText = '';
 
+      // If on cooldown or no actions/turn, just show disabled message instead of arming targeting
+      if (disabled) {
+        st._pendingAbility = { unitId: unit.id, abilityIndex: origIdx };
+        btn.classList.add('selected');
+        if (descEl) {
+          const cdMsg = cdLeft > 0 ? `On cooldown (${cdLeft} turn${cdLeft === 1 ? '' : 's'} remaining).` : (!isMyTurn ? 'Not your turn.' : 'No actions left.');
+          descEl.innerHTML = `
+            <div class="ability-title"><strong>${ab.name}</strong></div>
+            <div class="ability-text">${ab.description || ab.text || ''}</div>
+            <div class="ability-confirm">
+              <span class="ability-steps">${cdMsg}</span>
+              <button class="ability-cancel-btn" data-idx="${origIdx}">Close</button>
+            </div>`;
+          descEl.classList.add('visible');
+          const closeBtn = descEl.querySelector('.ability-cancel-btn');
+          if (closeBtn) closeBtn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            st._pendingAbility = null;
+            btn.classList.remove('selected');
+            descEl.classList.remove('visible');
+            if (typeof window.updateUI === 'function') window.updateUI();
+          });
+        }
+        return;
+      }
+
       // Mark pending and show description
       st.selectedUnit = unit;
       st._pendingAbility = { unitId: unit.id, abilityIndex: origIdx };

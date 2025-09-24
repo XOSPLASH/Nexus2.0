@@ -13,27 +13,37 @@ function clearSpawnHighlights() {
 
 function addSpawnOverlayAt(x, y) {
   const gridEl = document.getElementById('grid');
-  if (!gridEl) return;
-  const idx = y * BOARD_SIZE + x;
-  const cellEl = gridEl.children[idx];
+  const cellEl = gridEl?.querySelector(`.cell[data-x="${x}"][data-y="${y}"]`);
   if (!cellEl) return;
   if (cellEl.querySelector('.highlight-overlay.spawn-highlight')) return;
   const ov = document.createElement('div');
   ov.className = 'highlight-overlay spawn-highlight';
+  ov.style.outlineOffset = '0px';
   cellEl.appendChild(ov);
 }
 
 export function highlightSpawnableTiles(def, player) {
   clearSpawnHighlights();
-  if (!def) return;
-  
-  for (let y = 0; y < BOARD_SIZE; y++) {
-    for (let x = 0; x < BOARD_SIZE; x++) {
-      const cell = getCell(x, y);
+  const gridEl = document.getElementById('grid');
+  if (!gridEl) return;
+  const st = window.NexusCore?.state;
+  if (!st) return;
+  const isWaterOnly = !!(def && def.waterOnly);
+  for (let y = 0; y < st.size; y++) {
+    for (let x = 0; x < st.size; x++) {
+      const cell = window.NexusCore.getCell(x, y);
       if (!cell || cell.unit) continue;
       if (cell.nexus || cell.spawner || cell.heart) continue;
-      if (!isSpawnableForPlayer(def, x, y, player)) continue;
+      if (!window.NexusMechanics.isSpawnableForPlayer(def, x, y, player)) continue;
       addSpawnOverlayAt(x, y);
+      // If water-only unit, also lightly preview radius-2 around spawner for visual clarity
+      if (isWaterOnly) {
+        const sp = window.NexusMechanics.getSpawnerForPlayer(player);
+        if (sp && Math.abs(sp.x - x) <= 2 && Math.abs(sp.y - y) <= 2 && (Math.abs(sp.x - x) > 1 || Math.abs(sp.y - y) > 1)) {
+          const ov = gridEl.querySelector(`.cell[data-x="${x}"][data-y="${y}"] .highlight-overlay.spawn-highlight`);
+          if (ov) ov.classList.add('radius2');
+        }
+      }
     }
   }
 }
